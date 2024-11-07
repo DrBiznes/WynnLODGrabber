@@ -26,6 +26,9 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation 'com.google.code.gson:gson:2.10.1'
 
+    // Wynntils dependency
+    modImplementation files("libs/wynntils-2.1.1-fabric+MC-1.21.jar")
+
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
 

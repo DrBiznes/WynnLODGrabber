@@ -10,7 +10,6 @@ public class Config {
     private static Path configPath;
     private static Path configDir;
 
-    public boolean hasBeenAsked = false;
     public boolean hasDeclined = false;
     public boolean hasDownloadedLODs = false;
     public String currentLODVersion = "";

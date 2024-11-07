@@ -1,5 +1,6 @@
 {
   "screen.wynnlodgrabber.title": "Wynncraft LOD Download",
   "screen.wynnlodgrabber.accept": "Download LODs",
-  "screen.wynnlodgrabber.decline": "No Thanks"
+  "screen.wynnlodgrabber.notnow": "Not Right Now",
+  "screen.wynnlodgrabber.decline": "Don't Ask Again"
 }

@@ -10,13 +10,15 @@ public class LodPromptScreen extends Screen {
     private final Screen parent;
     private final Runnable onAccept;
     private final Runnable onDecline;
+    private final Runnable onNotNow;
     private static final int PADDING = 10;
 
-    public LodPromptScreen(Screen parent, Runnable onAccept, Runnable onDecline) {
+    public LodPromptScreen(Screen parent, Runnable onAccept, Runnable onDecline, Runnable onNotNow) {
         super(Text.translatable("screen.wynnlodgrabber.title"));
         this.parent = parent;
         this.onAccept = onAccept;
         this.onDecline = onDecline;
+        this.onNotNow = onNotNow;
     }
 
     @Override
@@ -25,7 +27,8 @@ public class LodPromptScreen extends Screen {
         int buttonHeight = 20;
         int spacing = 5;
 
-        int totalWidth = buttonWidth * 2 + spacing;
+        // Calculate total width needed for three buttons
+        int totalWidth = buttonWidth * 3 + spacing * 2;
         int startX = (width - totalWidth) / 2;
         int y = height / 2 + 20;
 
@@ -39,6 +42,16 @@ public class LodPromptScreen extends Screen {
                 .dimensions(startX, y, buttonWidth, buttonHeight)
                 .build());
 
+        // Not Right Now button
+        this.addDrawableChild(ButtonWidget.builder(
+                        Text.translatable("screen.wynnlodgrabber.notnow"),
+                        button -> {
+                            onNotNow.run();
+                            close();
+                        })
+                .dimensions(startX + buttonWidth + spacing, y, buttonWidth, buttonHeight)
+                .build());
+
         // Decline button
         this.addDrawableChild(ButtonWidget.builder(
                         Text.translatable("screen.wynnlodgrabber.decline"),
@@ -46,7 +59,7 @@ public class LodPromptScreen extends Screen {
                             onDecline.run();
                             close();
                         })
-                .dimensions(startX + buttonWidth + spacing, y, buttonWidth, buttonHeight)
+                .dimensions(startX + (buttonWidth + spacing) * 2, y, buttonWidth, buttonHeight)
                 .build());
     }
 
@@ -87,7 +100,7 @@ public class LodPromptScreen extends Screen {
 
     @Override
     public void close() {
-        MinecraftClient.getInstance().setScreen(null);
-        onDecline.run(); // Treat ESC same as clicking "No Thanks"
+        MinecraftClient.getInstance().setScreen(parent);
+        onNotNow.run(); // Treat ESC same as clicking "Not Right Now"
     }
 }
