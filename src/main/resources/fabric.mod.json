@@ -4,8 +4,12 @@
   "version": "${version}",
   "name": "WynnLODGrabber",
   "description": "",
-  "authors": [],
-  "contact": {},
+  "authors": [
+    "DrBiznes"
+  ],
+  "contact": {
+    "issues": "https://github.com/DrBiznes/WynnLODGrabber/issues"
+  },
   "license": "MIT",
   "icon": "assets/wynnlodgrabber/icon.png",
   "environment": "client",
