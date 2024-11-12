@@ -398,7 +398,7 @@ public class Wynnlodgrabber implements ModInitializer {
                 Files.createDirectories(configDir);
 
                 LOGGER.info("Starting LOD download process");
-                sendProgressMessage(client, "Starting Wynncraft LODs download...", Formatting.YELLOW);
+                sendProgressMessage(client, "Starting download, don't leave the game until the download is complete...", Formatting.YELLOW);
 
                 URL url = new URL(GITHUB_RELEASE_URL);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
