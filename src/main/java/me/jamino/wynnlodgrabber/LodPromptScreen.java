@@ -11,7 +11,6 @@ public class LodPromptScreen extends Screen {
     private final Runnable onAccept;
     private final Runnable onDecline;
     private final Runnable onNotNow;
-    private static final int PADDING = 10;
 
     public LodPromptScreen(Screen parent, Runnable onAccept, Runnable onDecline, Runnable onNotNow) {
         super(Text.translatable("screen.wynnlodgrabber.title"));
@@ -37,7 +36,7 @@ public class LodPromptScreen extends Screen {
                         Text.translatable("screen.wynnlodgrabber.accept"),
                         button -> {
                             onAccept.run();
-                            close();
+                            MinecraftClient.getInstance().setScreen(null);
                         })
                 .dimensions(startX, y, buttonWidth, buttonHeight)
                 .build());
@@ -47,7 +46,7 @@ public class LodPromptScreen extends Screen {
                         Text.translatable("screen.wynnlodgrabber.notnow"),
                         button -> {
                             onNotNow.run();
-                            close();
+                            MinecraftClient.getInstance().setScreen(null);
                         })
                 .dimensions(startX + buttonWidth + spacing, y, buttonWidth, buttonHeight)
                 .build());
@@ -57,15 +56,22 @@ public class LodPromptScreen extends Screen {
                         Text.translatable("screen.wynnlodgrabber.decline"),
                         button -> {
                             onDecline.run();
-                            close();
+                            MinecraftClient.getInstance().setScreen(null);
                         })
                 .dimensions(startX + (buttonWidth + spacing) * 2, y, buttonWidth, buttonHeight)
                 .build());
     }
 
     @Override
+    public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
+        // Override to prevent default background rendering which includes blur
+        context.fillGradient(0, 0, this.width, this.height, -1072689136, -804253680);
+    }
+
+    @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+        // Render our custom background
+        renderBackground(context, mouseX, mouseY, delta);
 
         // Draw the title
         context.drawCenteredTextWithShadow(textRenderer, getTitle(), width / 2, height / 2 - 40, 0xFFFFFF);
@@ -90,6 +96,7 @@ public class LodPromptScreen extends Screen {
             );
         }
 
+        // Render buttons
         super.render(context, mouseX, mouseY, delta);
     }
 
@@ -100,7 +107,7 @@ public class LodPromptScreen extends Screen {
 
     @Override
     public void close() {
-        MinecraftClient.getInstance().setScreen(parent);
-        onNotNow.run(); // Treat ESC same as clicking "Not Right Now"
+        onNotNow.run();
+        MinecraftClient.getInstance().setScreen(null);
     }
 }

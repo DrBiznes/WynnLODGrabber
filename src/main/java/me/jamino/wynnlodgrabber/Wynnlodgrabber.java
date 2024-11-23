@@ -39,6 +39,7 @@ public class Wynnlodgrabber implements ModInitializer {
     private static boolean wynntilsLoaded = false;
     private int tickCounter = 0;
     private static final int CHECK_INTERVAL = 20; // Check every second (20 ticks)
+    private boolean promptSuppressedUntilRestart = false;
 
     @Override
     public void onInitialize() {
@@ -80,7 +81,8 @@ public class Wynnlodgrabber implements ModInitializer {
     }
 
     private void onClientTick(MinecraftClient client) {
-        if (!wynntilsLoaded || client.player == null || config.hasDownloadedLODs || config.hasDeclined) {
+        if (!wynntilsLoaded || client.player == null || config.hasDownloadedLODs ||
+                config.hasDeclined || promptSuppressedUntilRestart) {
             return;
         }
 
@@ -105,7 +107,11 @@ public class Wynnlodgrabber implements ModInitializer {
                                 client.currentScreen,
                                 () -> onYesCommand(client),
                                 () -> onNoCommand(client),
-                                () -> client.setScreen(null) // Not Right Now action
+                                () -> {
+                                    // Handle Not Right Now
+                                    promptSuppressedUntilRestart = true;
+                                    LOGGER.info("LOD prompt suppressed until restart");
+                                }
                         ));
                     });
                 }
