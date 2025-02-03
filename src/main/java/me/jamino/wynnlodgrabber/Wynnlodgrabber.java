@@ -164,19 +164,19 @@ public class Wynnlodgrabber implements ModInitializer {
 
     private void showStatus(MinecraftClient client) {
         client.player.sendMessage(Text.literal("LOD Download Status:")
-                .formatted(Formatting.YELLOW));
+                .formatted(Formatting.YELLOW), false);
         client.player.sendMessage(Text.literal("- Has declined: " + config.hasDeclined)
-                .formatted(Formatting.WHITE));
+                .formatted(Formatting.WHITE), false);
         client.player.sendMessage(Text.literal("- Has downloaded LODs: " + config.hasDownloadedLODs)
-                .formatted(Formatting.WHITE));
+                .formatted(Formatting.WHITE), false);
         client.player.sendMessage(Text.literal("- Currently downloading: " + isCurrentlyDownloading)
-                .formatted(Formatting.WHITE));
+                .formatted(Formatting.WHITE), false);
 
         if (!config.hasDownloadedLODs && !isCurrentlyDownloading) {
             client.player.sendMessage(Text.literal("Click here to download LODs")
                     .formatted(Formatting.GREEN)
                     .styled(style -> style.withClickEvent(
-                            new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/wynn_lod_yes"))));
+                            new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/wynn_lod_yes"))), false);
         }
     }
 
@@ -226,7 +226,7 @@ public class Wynnlodgrabber implements ModInitializer {
     private void sendProgressMessage(MinecraftClient client, String message, Formatting color) {
         if (client.player != null) {
             client.execute(() -> client.player.sendMessage(
-                    Text.literal(message).formatted(color)
+                    Text.literal(message).formatted(color), false
             ));
         }
     }
@@ -371,7 +371,7 @@ public class Wynnlodgrabber implements ModInitializer {
 
         client.player.sendMessage(
                 Text.literal("You can always download the LODs later by typing /wynn_lod_yes")
-                        .formatted(Formatting.YELLOW)
+                        .formatted(Formatting.YELLOW), false
         );
     }
 
