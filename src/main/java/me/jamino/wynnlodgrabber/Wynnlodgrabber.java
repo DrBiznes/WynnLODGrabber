@@ -176,7 +176,7 @@ public class Wynnlodgrabber implements ModInitializer {
             client.player.sendMessage(Text.literal("Click here to download LODs")
                     .formatted(Formatting.GREEN)
                     .styled(style -> style.withClickEvent(
-                            new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/wynn_lod_yes"))), false);
+                            new ClickEvent.RunCommand("/wynn_lod_yes"))), false);
         }
     }
 
@@ -268,7 +268,7 @@ public class Wynnlodgrabber implements ModInitializer {
                             new TitleScreen(),
                             Text.literal("Disconnected"),
                             Text.literal("Finishing LOD Installation...").formatted(Formatting.GOLD)
-                    ));
+                    ),false);
 
                     Thread.sleep(2000);
 

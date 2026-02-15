@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.8-SNAPSHOT'
+    id 'fabric-loom' version '1.15-SNAPSHOT'
     id 'maven-publish'
 }
 
@@ -27,7 +27,7 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
 
     // Wynntils dependency
-    modImplementation files("libs/wynntils-3.0.3-fabric+MC-1.21.4.jar")
+    modImplementation files("libs/wynntils-4.0.0-fabric+MC-1.21.11.jar")
 
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
@@ -45,7 +45,7 @@ processResources {
     }
 }
 
-def targetJavaVersion = 17
+def targetJavaVersion = 21
 tasks.withType(JavaCompile).configureEach {
     // ensure that the encoding is set to UTF-8, no matter what the system default is
     // this fixes some edge cases with special characters not displaying correctly
