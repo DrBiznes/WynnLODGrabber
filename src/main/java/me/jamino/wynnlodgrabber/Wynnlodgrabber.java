@@ -6,13 +6,13 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.client.gui.screen.DisconnectedScreen;
-import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -27,6 +27,13 @@ import org.slf4j.LoggerFactory;
 import com.wynntils.core.components.Models;
 import com.wynntils.models.character.CharacterModel;
 
+// Distant Horizons API imports
+import com.seibel.distanthorizons.api.DhApi;
+import com.seibel.distanthorizons.api.methods.events.DhApiEventRegister;
+import com.seibel.distanthorizons.api.methods.events.abstractEvents.DhApiAfterDhInitEvent;
+import com.seibel.distanthorizons.api.methods.events.sharedParameterObjects.DhApiEventParam;
+import com.seibel.distanthorizons.api.enums.config.EDhApiServerFolderNameMode;
+
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
 public class Wynnlodgrabber implements ModInitializer {
@@ -40,12 +47,12 @@ public class Wynnlodgrabber implements ModInitializer {
     private int tickCounter = 0;
     private static final int CHECK_INTERVAL = 20; // Check every second (20 ticks)
     private boolean promptSuppressedUntilRestart = false;
+    private boolean dhInitialized = false;
 
     @Override
     public void onInitialize() {
         LOGGER.info("Initializing WynnLODGrabber...");
         try {
-            // Create base config directory path
             Path configDir = FabricLoader.getInstance().getConfigDir().resolve("wynnlodgrabber");
             Path configPath = configDir.resolve("config.json");
 
@@ -53,26 +60,23 @@ public class Wynnlodgrabber implements ModInitializer {
             config = Config.load(configPath);
             LOGGER.info("Config loaded successfully. Download status: " + config.hasDownloadedLODs);
 
-            // Check if Wynntils is loaded
             wynntilsLoaded = FabricLoader.getInstance().isModLoaded("wynntils");
             if (!wynntilsLoaded) {
                 LOGGER.error("Wynntils mod not found! This mod requires Wynntils to function properly.");
                 return;
             }
 
-            // Create necessary subdirectories
             Files.createDirectories(configDir.resolve("temp_extract"));
-
             LOGGER.info("Created necessary directories in: " + configDir);
         } catch (IOException e) {
             LOGGER.error("Failed to initialize mod directories:", e);
             return;
         }
 
-        // Register tick event for character check
+        registerDhApiEvents();
+
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
 
-        // Register connection event
         ClientPlayConnectionEvents.JOIN.register(this::onPlayerJoin);
         LOGGER.info("Registered server join event handler");
 
@@ -80,7 +84,43 @@ public class Wynnlodgrabber implements ModInitializer {
         LOGGER.info("Registered mod commands");
     }
 
-    private void onClientTick(MinecraftClient client) {
+    private void registerDhApiEvents() {
+        DhApiEventRegister.on(DhApiAfterDhInitEvent.class, new DhApiAfterDhInitEvent() {
+            @Override
+            public void afterDistantHorizonsInit(DhApiEventParam<Void> event) {
+                LOGGER.info("Distant Horizons initialized, setting server folder mode to IP_ONLY");
+                configureDistantHorizons();
+                dhInitialized = true;
+            }
+        });
+    }
+
+    private void configureDistantHorizons() {
+        try {
+            boolean success = DhApi.Delayed.configs.multiplayer().folderSavingMode().setValue(EDhApiServerFolderNameMode.IP_ONLY);
+            if (success) {
+                LOGGER.info("Successfully set DH server folder mode to IP_ONLY");
+            } else {
+                LOGGER.warn("Failed to set DH server folder mode to IP_ONLY, config may be locked");
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error setting DH server folder mode:", e);
+        }
+    }
+
+    private void onPlayerJoin(ClientPacketListener handler, PacketSender sender, Minecraft client) {
+        if (!handler.getConnection().getRemoteAddress().toString().contains("wynncraft")) {
+            return;
+        }
+
+        tickCounter = 0;
+
+        if (dhInitialized) {
+            configureDistantHorizons();
+        }
+    }
+
+    private void onClientTick(Minecraft client) {
         if (!wynntilsLoaded || client.player == null || config.hasDownloadedLODs ||
                 config.hasDeclined || promptSuppressedUntilRestart) {
             return;
@@ -93,22 +133,20 @@ public class Wynnlodgrabber implements ModInitializer {
         }
     }
 
-    private void checkCharacterSelected(MinecraftClient client) {
+    private void checkCharacterSelected(Minecraft client) {
         try {
             CharacterModel character = Models.Character;
             if (character.hasCharacter() && !isCurrentlyDownloading) {
-                // Only show prompt if on Wynncraft server
-                String serverAddress = client.getCurrentServerEntry() != null
-                        ? client.getCurrentServerEntry().address
+                String serverAddress = client.getCurrentServer() != null
+                        ? client.getCurrentServer().ip
                         : "";
                 if (serverAddress.contains("wynncraft")) {
                     client.execute(() -> {
                         client.setScreen(new LodPromptScreen(
-                                client.currentScreen,
+                                client.screen,
                                 () -> onYesCommand(client),
                                 () -> onNoCommand(client),
                                 () -> {
-                                    // Handle Not Right Now
                                     promptSuppressedUntilRestart = true;
                                     LOGGER.info("LOD prompt suppressed until restart");
                                 }
@@ -121,62 +159,80 @@ public class Wynnlodgrabber implements ModInitializer {
         }
     }
 
-    private void onPlayerJoin(ClientPlayNetworkHandler handler, PacketSender sender, MinecraftClient client) {
-        if (!handler.getConnection().getAddress().toString().contains("wynncraft")) {
-            return;
-        }
-
-        // Reset tick counter on join
-        tickCounter = 0;
-    }
-
     private void registerCommands() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(literal("wynn_lod_yes")
                     .executes(context -> {
                         LOGGER.info("Executing wynn_lod_yes command");
-                        onYesCommand(MinecraftClient.getInstance());
+                        onYesCommand(Minecraft.getInstance());
                         return 1;
                     }));
 
             dispatcher.register(literal("wynn_lod_no")
                     .executes(context -> {
                         LOGGER.info("Executing wynn_lod_no command");
-                        onNoCommand(MinecraftClient.getInstance());
+                        onNoCommand(Minecraft.getInstance());
                         return 1;
                     }));
 
             dispatcher.register(literal("wynn_lod_force")
                     .executes(context -> {
                         LOGGER.info("Executing wynn_lod_force command");
-                        forceDownload(MinecraftClient.getInstance());
+                        forceDownload(Minecraft.getInstance());
                         return 1;
                     }));
 
             dispatcher.register(literal("wynn_lod_status")
                     .executes(context -> {
                         LOGGER.info("Executing wynn_lod_status command");
-                        showStatus(MinecraftClient.getInstance());
+                        showStatus(Minecraft.getInstance());
+                        return 1;
+                    }));
+
+            dispatcher.register(literal("wynn_dh_config")
+                    .executes(context -> {
+                        LOGGER.info("Executing wynn_dh_config command");
+                        showDhConfig(Minecraft.getInstance());
                         return 1;
                     }));
         });
     }
 
-    private void showStatus(MinecraftClient client) {
-        client.player.sendMessage(Text.literal("LOD Download Status:")
-                .formatted(Formatting.YELLOW), false);
-        client.player.sendMessage(Text.literal("- Has declined: " + config.hasDeclined)
-                .formatted(Formatting.WHITE), false);
-        client.player.sendMessage(Text.literal("- Has downloaded LODs: " + config.hasDownloadedLODs)
-                .formatted(Formatting.WHITE), false);
-        client.player.sendMessage(Text.literal("- Currently downloading: " + isCurrentlyDownloading)
-                .formatted(Formatting.WHITE), false);
+    private void showDhConfig(Minecraft client) {
+        if (!dhInitialized) {
+            client.player.displayClientMessage(Component.literal("Distant Horizons is not yet initialized.").withStyle(ChatFormatting.RED), false);
+            return;
+        }
+
+        String currentMode = DhApi.Delayed.configs.multiplayer().folderSavingMode().getValue().toString();
+        client.player.displayClientMessage(Component.literal("Current DH Server Folder Mode: " + currentMode).withStyle(ChatFormatting.GREEN), false);
+
+        boolean success = DhApi.Delayed.configs.multiplayer().folderSavingMode().setValue(EDhApiServerFolderNameMode.IP_ONLY);
+        if (success) {
+            client.player.displayClientMessage(Component.literal("Server Folder Mode set to IP_ONLY").withStyle(ChatFormatting.GREEN), false);
+        } else {
+            client.player.displayClientMessage(Component.literal("Failed to set Server Folder Mode (might be locked)").withStyle(ChatFormatting.RED), false);
+        }
+    }
+
+    private void showStatus(Minecraft client) {
+        client.player.displayClientMessage(Component.literal("LOD Download Status:").withStyle(ChatFormatting.YELLOW), false);
+        client.player.displayClientMessage(Component.literal("- Has declined: " + config.hasDeclined).withStyle(ChatFormatting.WHITE), false);
+        client.player.displayClientMessage(Component.literal("- Has downloaded LODs: " + config.hasDownloadedLODs).withStyle(ChatFormatting.WHITE), false);
+        client.player.displayClientMessage(Component.literal("- Currently downloading: " + isCurrentlyDownloading).withStyle(ChatFormatting.WHITE), false);
+
+        if (dhInitialized) {
+            String currentMode = DhApi.Delayed.configs.multiplayer().folderSavingMode().getValue().toString();
+            client.player.displayClientMessage(Component.literal("- DH Server Folder Mode: " + currentMode).withStyle(ChatFormatting.WHITE), false);
+        } else {
+            client.player.displayClientMessage(Component.literal("- DH not yet initialized").withStyle(ChatFormatting.WHITE), false);
+        }
 
         if (!config.hasDownloadedLODs && !isCurrentlyDownloading) {
-            client.player.sendMessage(Text.literal("Click here to download LODs")
-                    .formatted(Formatting.GREEN)
-                    .styled(style -> style.withClickEvent(
-                            new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/wynn_lod_yes"))), false);
+            client.player.displayClientMessage(Component.literal("Click here to download LODs")
+                    .withStyle(ChatFormatting.GREEN)
+                    .withStyle(style -> style.withClickEvent(
+                            new ClickEvent.RunCommand("/wynn_lod_yes"))), false);
         }
     }
 
@@ -223,15 +279,15 @@ public class Wynnlodgrabber implements ModInitializer {
         }
     }
 
-    private void sendProgressMessage(MinecraftClient client, String message, Formatting color) {
+    private void sendProgressMessage(Minecraft client, String message, ChatFormatting color) {
         if (client.player != null) {
-            client.execute(() -> client.player.sendMessage(
-                    Text.literal(message).formatted(color), false
+            client.execute(() -> client.player.displayClientMessage(
+                    Component.literal(message).withStyle(color), false
             ));
         }
     }
 
-    private void disconnectAndInstall(MinecraftClient client, Path dhFolder, Path tempFile) {
+    private void disconnectAndInstall(Minecraft client, Path dhFolder, Path tempFile) {
         LOGGER.info("Preparing installation process...");
         Path modConfigDir = FabricLoader.getInstance().getConfigDir().resolve("wynnlodgrabber");
         Path tempExtractDir = modConfigDir.resolve("temp_extract");
@@ -264,11 +320,11 @@ public class Wynnlodgrabber implements ModInitializer {
                 try {
                     Thread.sleep(5000);
 
-                    MinecraftClient.getInstance().disconnect(new DisconnectedScreen(
+                    Minecraft.getInstance().disconnect(new DisconnectedScreen(
                             new TitleScreen(),
-                            Text.literal("Disconnected"),
-                            Text.literal("Finishing LOD Installation...").formatted(Formatting.GOLD)
-                    ));
+                            Component.literal("Disconnected"),
+                            Component.literal("Finishing LOD Installation...").withStyle(ChatFormatting.GOLD)
+                    ), false);
 
                     Thread.sleep(2000);
 
@@ -301,9 +357,9 @@ public class Wynnlodgrabber implements ModInitializer {
                 } catch (Exception e) {
                     LOGGER.error("Error during installation:", e);
                     client.execute(() -> {
-                        Text errorMessage = Text.literal("Error installing LODs: " + e.getMessage())
-                                .formatted(Formatting.RED);
-                        MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(errorMessage);
+                        Component errorMessage = Component.literal("Error installing LODs: " + e.getMessage())
+                                .withStyle(ChatFormatting.RED);
+                        Minecraft.getInstance().gui.getChat().addMessage(errorMessage);
                     });
                 } finally {
                     try {
@@ -330,7 +386,7 @@ public class Wynnlodgrabber implements ModInitializer {
             } catch (Exception cleanupEx) {
                 LOGGER.error("Failed to clean up after extraction failure:", cleanupEx);
             }
-            sendProgressMessage(client, "Error preparing LOD files: " + e.getMessage(), Formatting.RED);
+            sendProgressMessage(client, "Error preparing LOD files: " + e.getMessage(), ChatFormatting.RED);
             isCurrentlyDownloading = false;
         }
     }
@@ -338,7 +394,6 @@ public class Wynnlodgrabber implements ModInitializer {
     private void cleanupExistingFiles(Path dhFolder) {
         LOGGER.info("Cleaning up existing LOD files...");
         if (Files.exists(dhFolder)) {
-            // Try multiple times with delays
             for (int attempt = 1; attempt <= 3; attempt++) {
                 try {
                     deleteDirectoryRecursively(dhFolder);
@@ -347,7 +402,7 @@ public class Wynnlodgrabber implements ModInitializer {
                 } catch (Exception e) {
                     LOGGER.warn("Cleanup attempt " + attempt + " failed, waiting before retry...");
                     try {
-                        Thread.sleep(1000); // Wait a second between attempts
+                        Thread.sleep(1000);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         break;
@@ -357,11 +412,11 @@ public class Wynnlodgrabber implements ModInitializer {
         }
     }
 
-    public void onYesCommand(MinecraftClient client) {
+    public void onYesCommand(Minecraft client) {
         downloadAndInstallLODs(client);
     }
 
-    public void onNoCommand(MinecraftClient client) {
+    public void onNoCommand(Minecraft client) {
         config.hasDeclined = true;
         try {
             config.save();
@@ -369,13 +424,13 @@ public class Wynnlodgrabber implements ModInitializer {
             LOGGER.error("Failed to save config:", e);
         }
 
-        client.player.sendMessage(
-                Text.literal("You can always download the LODs later by typing /wynn_lod_yes")
-                        .formatted(Formatting.YELLOW), false
+        client.player.displayClientMessage(
+                Component.literal("You can always download the LODs later by typing /wynn_lod_yes")
+                        .withStyle(ChatFormatting.YELLOW), false
         );
     }
 
-    public void forceDownload(MinecraftClient client) {
+    public void forceDownload(Minecraft client) {
         config.hasDownloadedLODs = false;
         config.hasDeclined = false;
         try {
@@ -386,10 +441,10 @@ public class Wynnlodgrabber implements ModInitializer {
         downloadAndInstallLODs(client);
     }
 
-    private void downloadAndInstallLODs(MinecraftClient client) {
+    private void downloadAndInstallLODs(Minecraft client) {
         if (isCurrentlyDownloading) {
             LOGGER.warn("Download already in progress, ignoring new request");
-            sendProgressMessage(client, "Download already in progress!", Formatting.RED);
+            sendProgressMessage(client, "Download already in progress!", ChatFormatting.RED);
             return;
         }
 
@@ -404,7 +459,7 @@ public class Wynnlodgrabber implements ModInitializer {
                 Files.createDirectories(configDir);
 
                 LOGGER.info("Starting LOD download process");
-                sendProgressMessage(client, "Starting download, don't leave the game until the download is complete...", Formatting.YELLOW);
+                sendProgressMessage(client, "Starting download, don't leave the game until the download is complete...", ChatFormatting.YELLOW);
 
                 URL url = new URL(GITHUB_RELEASE_URL);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -450,12 +505,12 @@ public class Wynnlodgrabber implements ModInitializer {
                             sendProgressMessage(client,
                                     String.format("Download progress: %d%% (%.1f MB/s)",
                                             currentProgress, speedMBps),
-                                    Formatting.AQUA);
+                                    ChatFormatting.AQUA);
 
                             if (currentProgress >= 90 && lastProgressUpdate < 90) {
                                 sendProgressMessage(client,
                                         "Download almost complete! You will be disconnected shortly to install the LODs...",
-                                        Formatting.GOLD);
+                                        ChatFormatting.GOLD);
                             }
                         }
                     }
@@ -469,7 +524,7 @@ public class Wynnlodgrabber implements ModInitializer {
                 }
 
                 LOGGER.info("Download completed successfully, file size: " + Files.size(tempFile) + " bytes");
-                sendProgressMessage(client, "Download complete! You will be disconnected in 5 seconds to finish the installation.", Formatting.YELLOW);
+                sendProgressMessage(client, "Download complete! You will be disconnected in 5 seconds to finish the installation.", ChatFormatting.YELLOW);
 
                 if (!Files.exists(tempFile) || Files.size(tempFile) == 0) {
                     throw new IOException("Downloaded file is missing or empty");
@@ -482,7 +537,7 @@ public class Wynnlodgrabber implements ModInitializer {
                 LOGGER.error("Download failed: " + errorMessage, e);
                 sendProgressMessage(client,
                         "Error downloading LODs: " + errorMessage + "\nTry using /wynn_lod_force to retry the download.",
-                        Formatting.RED);
+                        ChatFormatting.RED);
 
                 if (tempFile != null) {
                     try {
@@ -498,7 +553,7 @@ public class Wynnlodgrabber implements ModInitializer {
                 LOGGER.error("Unexpected error during download process:", e);
                 sendProgressMessage(client,
                         "Unexpected error occurred. Please check the logs and try again.",
-                        Formatting.RED);
+                        ChatFormatting.RED);
 
                 if (tempFile != null) {
                     try {
