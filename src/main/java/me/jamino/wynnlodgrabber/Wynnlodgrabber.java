@@ -44,6 +44,8 @@ public class Wynnlodgrabber implements ModInitializer {
 
     private int tickCounter = 0;
     private static final int CHECK_INTERVAL = 20;
+    private static final int CHARACTER_LOAD_DELAY = 5; // checks (5 seconds) before prompting
+    private int characterReadyChecks = 0;
     private boolean promptSuppressedUntilRestart = false;
     private boolean conflictShown = false;
     private DhCompat dhCompat = null;
@@ -91,6 +93,7 @@ public class Wynnlodgrabber implements ModInitializer {
         if (!serverIp.contains("wynncraft")) return;
 
         tickCounter = 0;
+        characterReadyChecks = 0;
 
         if (dhLoaded && dhCompat != null && dhCompat.isInitialized()) {
             dhCompat.configure();
@@ -131,7 +134,13 @@ public class Wynnlodgrabber implements ModInitializer {
     private void checkCharacterSelected(Minecraft client) {
         try {
             CharacterModel character = Models.Character;
-            if (!character.hasCharacter() || isCurrentlyDownloading) return;
+            if (!character.hasCharacter() || isCurrentlyDownloading) {
+                characterReadyChecks = 0;
+                return;
+            }
+
+            characterReadyChecks++;
+            if (characterReadyChecks < CHARACTER_LOAD_DELAY) return;
 
             String serverAddress = client.getCurrentServer() != null ? client.getCurrentServer().ip : "";
             if (!serverAddress.contains("wynncraft")) return;
