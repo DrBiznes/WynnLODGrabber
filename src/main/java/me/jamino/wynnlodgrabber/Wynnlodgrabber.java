@@ -23,31 +23,30 @@ import java.util.zip.ZipInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// Wynntils imports
 import com.wynntils.core.components.Models;
 import com.wynntils.models.character.CharacterModel;
-
-// Distant Horizons API imports
-import com.seibel.distanthorizons.api.DhApi;
-import com.seibel.distanthorizons.api.methods.events.DhApiEventRegister;
-import com.seibel.distanthorizons.api.methods.events.abstractEvents.DhApiAfterDhInitEvent;
-import com.seibel.distanthorizons.api.methods.events.sharedParameterObjects.DhApiEventParam;
-import com.seibel.distanthorizons.api.enums.config.EDhApiServerFolderNameMode;
 
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
 public class Wynnlodgrabber implements ModInitializer {
-    private static final String GITHUB_RELEASE_URL = "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-11-05-24/wynnlods.zip";
-    private static final String DH_FOLDER = "Distant_Horizons_server_data";
+    private static final String DH_DOWNLOAD_URL   = "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-11-05-24/wynnlods.zip";
+    private static final String VOXY_DOWNLOAD_URL = "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-04-19-26/frumavoxylods.zip";
+    private static final String DH_DATA_DIR       = "Distant_Horizons_server_data";
+    private static final String VOXY_DATA_DIR     = ".voxy/saves";
+
     public static final Logger LOGGER = LoggerFactory.getLogger("wynnlodgrabber");
 
     private static Config config;
-    private static boolean isCurrentlyDownloading = false;
-    private static boolean wynntilsLoaded = false;
+    private static boolean isCurrentlyDownloading  = false;
+    private static boolean wynntilsLoaded          = false;
+    private static boolean dhLoaded                = false;
+    private static boolean voxyLoaded              = false;
+
     private int tickCounter = 0;
-    private static final int CHECK_INTERVAL = 20; // Check every second (20 ticks)
+    private static final int CHECK_INTERVAL = 20;
     private boolean promptSuppressedUntilRestart = false;
-    private boolean dhInitialized = false;
+    private boolean conflictShown = false;
+    private DhCompat dhCompat = null;
 
     @Override
     public void onInitialize() {
@@ -55,76 +54,72 @@ public class Wynnlodgrabber implements ModInitializer {
         try {
             Path configDir = FabricLoader.getInstance().getConfigDir().resolve("wynnlodgrabber");
             Path configPath = configDir.resolve("config.json");
-
-            LOGGER.info("Loading config from: " + configPath);
             config = Config.load(configPath);
-            LOGGER.info("Config loaded successfully. Download status: " + config.hasDownloadedLODs);
-
-            wynntilsLoaded = FabricLoader.getInstance().isModLoaded("wynntils");
-            if (!wynntilsLoaded) {
-                LOGGER.error("Wynntils mod not found! This mod requires Wynntils to function properly.");
-                return;
-            }
-
-            Files.createDirectories(configDir.resolve("temp_extract"));
-            LOGGER.info("Created necessary directories in: " + configDir);
         } catch (IOException e) {
             LOGGER.error("Failed to initialize mod directories:", e);
             return;
         }
 
-        registerDhApiEvents();
-
-        ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
-
-        ClientPlayConnectionEvents.JOIN.register(this::onPlayerJoin);
-        LOGGER.info("Registered server join event handler");
-
-        registerCommands();
-        LOGGER.info("Registered mod commands");
-    }
-
-    private void registerDhApiEvents() {
-        DhApiEventRegister.on(DhApiAfterDhInitEvent.class, new DhApiAfterDhInitEvent() {
-            @Override
-            public void afterDistantHorizonsInit(DhApiEventParam<Void> event) {
-                LOGGER.info("Distant Horizons initialized, setting server folder mode to IP_ONLY");
-                configureDistantHorizons();
-                dhInitialized = true;
-            }
-        });
-    }
-
-    private void configureDistantHorizons() {
-        try {
-            boolean success = DhApi.Delayed.configs.multiplayer().folderSavingMode().setValue(EDhApiServerFolderNameMode.IP_ONLY);
-            if (success) {
-                LOGGER.info("Successfully set DH server folder mode to IP_ONLY");
-            } else {
-                LOGGER.warn("Failed to set DH server folder mode to IP_ONLY, config may be locked");
-            }
-        } catch (Exception e) {
-            LOGGER.error("Error setting DH server folder mode:", e);
-        }
-    }
-
-    private void onPlayerJoin(ClientPacketListener handler, PacketSender sender, Minecraft client) {
-        if (!handler.getConnection().getRemoteAddress().toString().contains("wynncraft")) {
+        wynntilsLoaded = FabricLoader.getInstance().isModLoaded("wynntils");
+        if (!wynntilsLoaded) {
+            LOGGER.error("Wynntils mod not found! This mod requires Wynntils to function.");
             return;
         }
 
+        dhLoaded   = FabricLoader.getInstance().isModLoaded("distanthorizons");
+        voxyLoaded = FabricLoader.getInstance().isModLoaded("voxy");
+
+        if (!dhLoaded && !voxyLoaded) {
+            LOGGER.error("Neither Distant Horizons nor Voxy found! Install at least one LOD mod.");
+            return;
+        }
+
+        if (dhLoaded) {
+            dhCompat = new DhCompat(() -> {});
+            dhCompat.registerEvents();
+        }
+
+        ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
+        ClientPlayConnectionEvents.JOIN.register(this::onPlayerJoin);
+        registerCommands();
+
+        LOGGER.info("WynnLODGrabber initialized. DH={}, Voxy={}", dhLoaded, voxyLoaded);
+    }
+
+    private void onPlayerJoin(ClientPacketListener handler, PacketSender sender, Minecraft client) {
+        String serverIp = client.getCurrentServer() != null ? client.getCurrentServer().ip : "";
+        if (!serverIp.contains("wynncraft")) return;
+
         tickCounter = 0;
 
-        if (dhInitialized) {
-            configureDistantHorizons();
+        if (dhLoaded && dhCompat != null && dhCompat.isInitialized()) {
+            dhCompat.configure();
+        }
+
+        // Notify if LODs were installed for a different wynncraft IP
+        if (dhLoaded && config.hasDownloadedDhLods
+                && !config.installedDhIp.isEmpty()
+                && !serverIp.equals(config.installedDhIp)) {
+            sendChat(client, "DH LODs were installed for " + config.installedDhIp
+                    + ". Use /wynn_lod_force to reinstall for this server.", ChatFormatting.YELLOW);
+        }
+        if (voxyLoaded && config.hasDownloadedVoxyLods
+                && !config.installedVoxyIp.isEmpty()
+                && !serverIp.equals(config.installedVoxyIp)) {
+            sendChat(client, "Voxy LODs were installed for " + config.installedVoxyIp
+                    + ". Use /wynn_lod_force to reinstall for this server.", ChatFormatting.YELLOW);
         }
     }
 
     private void onClientTick(Minecraft client) {
-        if (!wynntilsLoaded || client.player == null || config.hasDownloadedLODs ||
-                config.hasDeclined || promptSuppressedUntilRestart) {
+        // Show conflict screen once if both LOD mods are installed
+        if (dhLoaded && voxyLoaded && !conflictShown) {
+            conflictShown = true;
+            client.execute(() -> client.setScreen(new ConflictScreen()));
             return;
         }
+
+        if (!wynntilsLoaded || client.player == null || promptSuppressedUntilRestart) return;
 
         tickCounter++;
         if (tickCounter >= CHECK_INTERVAL) {
@@ -136,23 +131,33 @@ public class Wynnlodgrabber implements ModInitializer {
     private void checkCharacterSelected(Minecraft client) {
         try {
             CharacterModel character = Models.Character;
-            if (character.hasCharacter() && !isCurrentlyDownloading) {
-                String serverAddress = client.getCurrentServer() != null
-                        ? client.getCurrentServer().ip
-                        : "";
-                if (serverAddress.contains("wynncraft")) {
-                    client.execute(() -> {
-                        client.setScreen(new LodPromptScreen(
-                                client.screen,
-                                () -> onYesCommand(client),
-                                () -> onNoCommand(client),
-                                () -> {
-                                    promptSuppressedUntilRestart = true;
-                                    LOGGER.info("LOD prompt suppressed until restart");
-                                }
-                        ));
-                    });
-                }
+            if (!character.hasCharacter() || isCurrentlyDownloading) return;
+
+            String serverAddress = client.getCurrentServer() != null ? client.getCurrentServer().ip : "";
+            if (!serverAddress.contains("wynncraft")) return;
+
+            if (dhLoaded && !config.hasDownloadedDhLods && !config.hasDeclinedDh) {
+                client.execute(() -> client.setScreen(new LodPromptScreen(
+                        client.screen,
+                        "Distant Horizons",
+                        () -> onYesCommand(client, "dh"),
+                        () -> onNoCommand(client, "dh"),
+                        () -> {
+                            promptSuppressedUntilRestart = true;
+                            LOGGER.info("DH LOD prompt suppressed until restart");
+                        }
+                )));
+            } else if (voxyLoaded && !config.hasDownloadedVoxyLods && !config.hasDeclinedVoxy) {
+                client.execute(() -> client.setScreen(new LodPromptScreen(
+                        client.screen,
+                        "Voxy",
+                        () -> onYesCommand(client, "voxy"),
+                        () -> onNoCommand(client, "voxy"),
+                        () -> {
+                            promptSuppressedUntilRestart = true;
+                            LOGGER.info("Voxy LOD prompt suppressed until restart");
+                        }
+                )));
             }
         } catch (Exception e) {
             LOGGER.error("Error checking character selection:", e);
@@ -163,328 +168,152 @@ public class Wynnlodgrabber implements ModInitializer {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(literal("wynn_lod_yes")
                     .executes(context -> {
-                        LOGGER.info("Executing wynn_lod_yes command");
-                        onYesCommand(Minecraft.getInstance());
+                        String mod = dhLoaded ? "dh" : "voxy";
+                        onYesCommand(Minecraft.getInstance(), mod);
                         return 1;
                     }));
 
             dispatcher.register(literal("wynn_lod_no")
                     .executes(context -> {
-                        LOGGER.info("Executing wynn_lod_no command");
-                        onNoCommand(Minecraft.getInstance());
+                        String mod = dhLoaded ? "dh" : "voxy";
+                        onNoCommand(Minecraft.getInstance(), mod);
                         return 1;
                     }));
 
             dispatcher.register(literal("wynn_lod_force")
                     .executes(context -> {
-                        LOGGER.info("Executing wynn_lod_force command");
                         forceDownload(Minecraft.getInstance());
                         return 1;
                     }));
 
             dispatcher.register(literal("wynn_lod_status")
                     .executes(context -> {
-                        LOGGER.info("Executing wynn_lod_status command");
                         showStatus(Minecraft.getInstance());
                         return 1;
                     }));
 
-            dispatcher.register(literal("wynn_dh_config")
-                    .executes(context -> {
-                        LOGGER.info("Executing wynn_dh_config command");
-                        showDhConfig(Minecraft.getInstance());
-                        return 1;
-                    }));
+            if (dhLoaded) {
+                dispatcher.register(literal("wynn_dh_config")
+                        .executes(context -> {
+                            showDhConfig(Minecraft.getInstance());
+                            return 1;
+                        }));
+            }
         });
     }
 
     private void showDhConfig(Minecraft client) {
-        if (!dhInitialized) {
-            client.player.displayClientMessage(Component.literal("Distant Horizons is not yet initialized.").withStyle(ChatFormatting.RED), false);
+        if (dhCompat == null || !dhCompat.isInitialized()) {
+            sendChat(client, "Distant Horizons is not yet initialized.", ChatFormatting.RED);
             return;
         }
-
-        String currentMode = DhApi.Delayed.configs.multiplayer().folderSavingMode().getValue().toString();
-        client.player.displayClientMessage(Component.literal("Current DH Server Folder Mode: " + currentMode).withStyle(ChatFormatting.GREEN), false);
-
-        boolean success = DhApi.Delayed.configs.multiplayer().folderSavingMode().setValue(EDhApiServerFolderNameMode.IP_ONLY);
-        if (success) {
-            client.player.displayClientMessage(Component.literal("Server Folder Mode set to IP_ONLY").withStyle(ChatFormatting.GREEN), false);
-        } else {
-            client.player.displayClientMessage(Component.literal("Failed to set Server Folder Mode (might be locked)").withStyle(ChatFormatting.RED), false);
-        }
+        sendChat(client, "Current DH Folder Mode: " + dhCompat.getFolderMode(), ChatFormatting.GREEN);
+        boolean success = dhCompat.setFolderModeIpOnly();
+        sendChat(client, success ? "Folder mode set to IP_ONLY" : "Failed to set folder mode (may be locked)",
+                success ? ChatFormatting.GREEN : ChatFormatting.RED);
     }
 
     private void showStatus(Minecraft client) {
-        client.player.displayClientMessage(Component.literal("LOD Download Status:").withStyle(ChatFormatting.YELLOW), false);
-        client.player.displayClientMessage(Component.literal("- Has declined: " + config.hasDeclined).withStyle(ChatFormatting.WHITE), false);
-        client.player.displayClientMessage(Component.literal("- Has downloaded LODs: " + config.hasDownloadedLODs).withStyle(ChatFormatting.WHITE), false);
-        client.player.displayClientMessage(Component.literal("- Currently downloading: " + isCurrentlyDownloading).withStyle(ChatFormatting.WHITE), false);
+        sendChat(client, "LOD Download Status:", ChatFormatting.YELLOW);
+        if (dhLoaded) {
+            sendChat(client, "- DH LODs downloaded: " + config.hasDownloadedDhLods
+                    + (config.hasDownloadedDhLods ? " (" + config.installedDhIp + ")" : ""), ChatFormatting.WHITE);
+            sendChat(client, "- DH declined: " + config.hasDeclinedDh, ChatFormatting.WHITE);
+        }
+        if (voxyLoaded) {
+            sendChat(client, "- Voxy LODs downloaded: " + config.hasDownloadedVoxyLods
+                    + (config.hasDownloadedVoxyLods ? " (" + config.installedVoxyIp + ")" : ""), ChatFormatting.WHITE);
+            sendChat(client, "- Voxy declined: " + config.hasDeclinedVoxy, ChatFormatting.WHITE);
+        }
+        sendChat(client, "- Currently downloading: " + isCurrentlyDownloading, ChatFormatting.WHITE);
 
-        if (dhInitialized) {
-            String currentMode = DhApi.Delayed.configs.multiplayer().folderSavingMode().getValue().toString();
-            client.player.displayClientMessage(Component.literal("- DH Server Folder Mode: " + currentMode).withStyle(ChatFormatting.WHITE), false);
-        } else {
-            client.player.displayClientMessage(Component.literal("- DH not yet initialized").withStyle(ChatFormatting.WHITE), false);
+        if (dhLoaded && dhCompat != null && dhCompat.isInitialized()) {
+            sendChat(client, "- DH Folder Mode: " + dhCompat.getFolderMode(), ChatFormatting.WHITE);
         }
 
-        if (!config.hasDownloadedLODs && !isCurrentlyDownloading) {
+        boolean needsDownload = (dhLoaded && !config.hasDownloadedDhLods)
+                || (voxyLoaded && !config.hasDownloadedVoxyLods);
+        if (needsDownload && !isCurrentlyDownloading) {
             client.player.displayClientMessage(Component.literal("Click here to download LODs")
                     .withStyle(ChatFormatting.GREEN)
-                    .withStyle(style -> style.withClickEvent(
-                            new ClickEvent.RunCommand("/wynn_lod_yes"))), false);
+                    .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand("/wynn_lod_yes"))), false);
         }
     }
 
-    private void deleteDirectoryRecursively(Path path) {
-        LOGGER.info("Starting recursive deletion of directory: " + path);
-
-        if (!Files.exists(path)) {
-            LOGGER.info("Directory doesn't exist, nothing to delete: " + path);
-            return;
-        }
-
-        try {
-            Files.walk(path)
-                    .sorted((a, b) -> b.compareTo(a))
-                    .forEach(file -> {
-                        try {
-                            LOGGER.debug("Attempting to delete: " + file);
-                            Files.deleteIfExists(file);
-                            LOGGER.debug("Successfully deleted: " + file);
-                        } catch (IOException e) {
-                            LOGGER.error("Failed to delete file: " + file, e);
-
-                            if (System.getProperty("os.name").toLowerCase().contains("win")) {
-                                try {
-                                    LOGGER.info("Attempting force delete on Windows for: " + file);
-                                    System.gc();
-                                    Thread.sleep(100);
-                                    Files.deleteIfExists(file);
-                                    LOGGER.info("Force delete successful for: " + file);
-                                } catch (IOException | InterruptedException ex) {
-                                    LOGGER.error("Force delete also failed for: " + file, ex);
-                                    if (ex instanceof InterruptedException) {
-                                        Thread.currentThread().interrupt();
-                                    }
-                                }
-                            }
-                        }
-                    });
-
-            LOGGER.info("Completed recursive deletion of directory: " + path);
-        } catch (IOException e) {
-            LOGGER.error("Failed to walk directory tree for deletion: " + path, e);
-            throw new RuntimeException("Failed to delete directory: " + path, e);
+    public void onYesCommand(Minecraft client, String mod) {
+        if ("dh".equals(mod)) {
+            downloadAndInstallLods(client, "dh");
+        } else {
+            downloadAndInstallLods(client, "voxy");
         }
     }
 
-    private void sendProgressMessage(Minecraft client, String message, ChatFormatting color) {
-        if (client.player != null) {
-            client.execute(() -> client.player.displayClientMessage(
-                    Component.literal(message).withStyle(color), false
-            ));
+    public void onNoCommand(Minecraft client, String mod) {
+        if ("dh".equals(mod)) {
+            config.hasDeclinedDh = true;
+        } else {
+            config.hasDeclinedVoxy = true;
         }
-    }
-
-    private void disconnectAndInstall(Minecraft client, Path dhFolder, Path tempFile) {
-        LOGGER.info("Preparing installation process...");
-        Path modConfigDir = FabricLoader.getInstance().getConfigDir().resolve("wynnlodgrabber");
-        Path tempExtractDir = modConfigDir.resolve("temp_extract");
-
-        try {
-            if (Files.exists(tempExtractDir)) {
-                LOGGER.info("Cleaning up existing temp directory...");
-                deleteDirectoryRecursively(tempExtractDir);
-            }
-
-            Files.createDirectories(tempExtractDir);
-            LOGGER.info("Created temporary extraction directory: " + tempExtractDir);
-
-            LOGGER.info("Pre-extracting files to temporary directory...");
-            try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(tempFile))) {
-                ZipEntry entry;
-                while ((entry = zis.getNextEntry()) != null) {
-                    Path outputPath = tempExtractDir.resolve(entry.getName());
-                    Files.createDirectories(outputPath.getParent());
-
-                    if (!entry.isDirectory()) {
-                        LOGGER.info("Extracting: " + entry.getName() + " to " + outputPath);
-                        Files.copy(zis, outputPath, StandardCopyOption.REPLACE_EXISTING);
-                    }
-                    zis.closeEntry();
-                }
-            }
-
-            client.execute(() -> {
-                try {
-                    Thread.sleep(5000);
-
-                    Minecraft.getInstance().disconnect(new DisconnectedScreen(
-                            new TitleScreen(),
-                            Component.literal("Disconnected"),
-                            Component.literal("Finishing LOD Installation...").withStyle(ChatFormatting.GOLD)
-                    ), false);
-
-                    Thread.sleep(2000);
-
-                    cleanupExistingFiles(dhFolder);
-                    Files.createDirectories(dhFolder);
-
-                    LOGGER.info("Moving files from temporary directory to final location...");
-                    Files.walk(tempExtractDir)
-                            .filter(Files::isRegularFile)
-                            .forEach(source -> {
-                                try {
-                                    Path relativePath = tempExtractDir.relativize(source);
-                                    Path target = dhFolder.resolve(relativePath);
-                                    Files.createDirectories(target.getParent());
-                                    Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                                } catch (IOException e) {
-                                    LOGGER.error("Failed to move file: " + source, e);
-                                }
-                            });
-
-                    deleteDirectoryRecursively(tempExtractDir);
-                    Files.deleteIfExists(tempFile);
-
-                    config.hasDownloadedLODs = true;
-                    config.hasDeclined = false;
-                    config.save();
-
-                    LOGGER.info("LOD installation completed successfully");
-
-                } catch (Exception e) {
-                    LOGGER.error("Error during installation:", e);
-                    client.execute(() -> {
-                        Component errorMessage = Component.literal("Error installing LODs: " + e.getMessage())
-                                .withStyle(ChatFormatting.RED);
-                        Minecraft.getInstance().gui.getChat().addMessage(errorMessage);
-                    });
-                } finally {
-                    try {
-                        LOGGER.info("Performing final cleanup...");
-                        if (Files.exists(tempExtractDir)) {
-                            deleteDirectoryRecursively(tempExtractDir);
-                        }
-                        Files.deleteIfExists(tempFile);
-                        LOGGER.info("Final cleanup completed");
-                    } catch (Exception cleanupEx) {
-                        LOGGER.error("Failed to clean up temporary files:", cleanupEx);
-                    }
-                    isCurrentlyDownloading = false;
-                }
-            });
-
-        } catch (Exception e) {
-            LOGGER.error("Error during pre-extraction:", e);
-            try {
-                LOGGER.info("Cleaning up after extraction failure...");
-                deleteDirectoryRecursively(tempExtractDir);
-                Files.deleteIfExists(tempFile);
-                LOGGER.info("Cleanup after failure completed");
-            } catch (Exception cleanupEx) {
-                LOGGER.error("Failed to clean up after extraction failure:", cleanupEx);
-            }
-            sendProgressMessage(client, "Error preparing LOD files: " + e.getMessage(), ChatFormatting.RED);
-            isCurrentlyDownloading = false;
-        }
-    }
-
-    private void cleanupExistingFiles(Path dhFolder) {
-        LOGGER.info("Cleaning up existing LOD files...");
-        if (Files.exists(dhFolder)) {
-            for (int attempt = 1; attempt <= 3; attempt++) {
-                try {
-                    deleteDirectoryRecursively(dhFolder);
-                    LOGGER.info("Successfully cleaned up files on attempt " + attempt);
-                    return;
-                } catch (Exception e) {
-                    LOGGER.warn("Cleanup attempt " + attempt + " failed, waiting before retry...");
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    public void onYesCommand(Minecraft client) {
-        downloadAndInstallLODs(client);
-    }
-
-    public void onNoCommand(Minecraft client) {
-        config.hasDeclined = true;
         try {
             config.save();
         } catch (IOException e) {
             LOGGER.error("Failed to save config:", e);
         }
-
-        client.player.displayClientMessage(
-                Component.literal("You can always download the LODs later by typing /wynn_lod_yes")
-                        .withStyle(ChatFormatting.YELLOW), false
-        );
+        sendChat(client, "You can always download the LODs later with /wynn_lod_yes", ChatFormatting.YELLOW);
     }
 
     public void forceDownload(Minecraft client) {
-        config.hasDownloadedLODs = false;
-        config.hasDeclined = false;
+        config.hasDownloadedDhLods   = false;
+        config.hasDownloadedVoxyLods = false;
+        config.hasDeclinedDh         = false;
+        config.hasDeclinedVoxy       = false;
         try {
             config.save();
         } catch (IOException e) {
             LOGGER.error("Failed to save config during force download:", e);
         }
-        downloadAndInstallLODs(client);
+        String mod = dhLoaded ? "dh" : "voxy";
+        downloadAndInstallLods(client, mod);
     }
 
-    private void downloadAndInstallLODs(Minecraft client) {
+    private void downloadAndInstallLods(Minecraft client, String mod) {
         if (isCurrentlyDownloading) {
-            LOGGER.warn("Download already in progress, ignoring new request");
-            sendProgressMessage(client, "Download already in progress!", ChatFormatting.RED);
+            sendChat(client, "Download already in progress!", ChatFormatting.RED);
+            return;
+        }
+
+        String downloadUrl = "dh".equals(mod) ? DH_DOWNLOAD_URL : VOXY_DOWNLOAD_URL;
+        if (downloadUrl.isEmpty()) {
+            sendChat(client, "Download URL for " + mod.toUpperCase() + " LODs is not configured yet.", ChatFormatting.RED);
             return;
         }
 
         Thread downloadThread = new Thread(() -> {
             isCurrentlyDownloading = true;
             Path tempFile = null;
-
             try {
                 Path configDir = FabricLoader.getInstance().getConfigDir().resolve("wynnlodgrabber");
-                Path dhFolder = FabricLoader.getInstance().getGameDir().resolve(DH_FOLDER);
-
                 Files.createDirectories(configDir);
 
-                LOGGER.info("Starting LOD download process");
-                sendProgressMessage(client, "Starting download, don't leave the game until the download is complete...", ChatFormatting.YELLOW);
+                sendProgressMessage(client, "Starting download, don't leave the game until complete...", ChatFormatting.YELLOW);
 
-                URL url = new URL(GITHUB_RELEASE_URL);
+                URL url = new URL(downloadUrl);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestProperty("User-Agent", "WynnLODGrabber Mod");
                 connection.setConnectTimeout(30000);
                 connection.setReadTimeout(30000);
 
                 int responseCode = connection.getResponseCode();
-                LOGGER.info("Server response code: " + responseCode);
-
                 if (responseCode != HttpURLConnection.HTTP_OK) {
                     throw new IOException("Server returned response code: " + responseCode);
                 }
 
                 int fileSize = connection.getContentLength();
-                LOGGER.info("Expected file size: " + fileSize + " bytes");
-
                 tempFile = configDir.resolve("download_temp.zip");
-                LOGGER.info("Created temporary file: " + tempFile);
-
                 Files.deleteIfExists(tempFile);
 
                 try (InputStream in = connection.getInputStream();
                      OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE_NEW)) {
-
                     byte[] buffer = new byte[8192];
                     int bytesRead;
                     long totalBytesRead = 0;
@@ -495,81 +324,113 @@ public class Wynnlodgrabber implements ModInitializer {
                         out.write(buffer, 0, bytesRead);
                         totalBytesRead += bytesRead;
 
-                        int currentProgress = (int)((totalBytesRead * 100) / fileSize);
-                        if (currentProgress >= lastProgressUpdate + 10) {
-                            lastProgressUpdate = currentProgress;
-
-                            long elapsedTime = System.currentTimeMillis() - startTime;
-                            double speedMBps = (totalBytesRead / 1024.0 / 1024.0) / (elapsedTime / 1000.0);
-
-                            sendProgressMessage(client,
-                                    String.format("Download progress: %d%% (%.1f MB/s)",
-                                            currentProgress, speedMBps),
-                                    ChatFormatting.AQUA);
-
-                            if (currentProgress >= 90 && lastProgressUpdate < 90) {
+                        if (fileSize > 0) {
+                            int currentProgress = (int) ((totalBytesRead * 100) / fileSize);
+                            if (currentProgress >= lastProgressUpdate + 10) {
+                                lastProgressUpdate = currentProgress;
+                                long elapsed = System.currentTimeMillis() - startTime;
+                                double speedMBps = (totalBytesRead / 1024.0 / 1024.0) / (elapsed / 1000.0);
                                 sendProgressMessage(client,
-                                        "Download almost complete! You will be disconnected shortly to install the LODs...",
-                                        ChatFormatting.GOLD);
+                                        String.format("Download progress: %d%% (%.1f MB/s)", currentProgress, speedMBps),
+                                        ChatFormatting.AQUA);
                             }
                         }
                     }
-
-                    long downloadedSize = Files.size(tempFile);
-                    if (downloadedSize != fileSize) {
-                        throw new IOException(String.format(
-                                "Downloaded file size (%d) does not match expected size (%d)",
-                                downloadedSize, fileSize));
-                    }
                 }
 
-                LOGGER.info("Download completed successfully, file size: " + Files.size(tempFile) + " bytes");
-                sendProgressMessage(client, "Download complete! You will be disconnected in 5 seconds to finish the installation.", ChatFormatting.YELLOW);
+                LOGGER.info("Download complete, size: {} bytes", Files.size(tempFile));
+                sendProgressMessage(client, "Download complete! Disconnecting in 5 seconds to install LODs...", ChatFormatting.YELLOW);
 
-                if (!Files.exists(tempFile) || Files.size(tempFile) == 0) {
-                    throw new IOException("Downloaded file is missing or empty");
-                }
-
-                disconnectAndInstall(client, dhFolder, tempFile);
+                installLods(client, tempFile, mod);
 
             } catch (IOException e) {
-                String errorMessage = e.getMessage() != null ? e.getMessage() : "Unknown error";
-                LOGGER.error("Download failed: " + errorMessage, e);
-                sendProgressMessage(client,
-                        "Error downloading LODs: " + errorMessage + "\nTry using /wynn_lod_force to retry the download.",
-                        ChatFormatting.RED);
-
+                LOGGER.error("Download failed:", e);
+                sendProgressMessage(client, "Error downloading LODs: " + e.getMessage(), ChatFormatting.RED);
                 if (tempFile != null) {
-                    try {
-                        Files.deleteIfExists(tempFile);
-                        LOGGER.info("Cleaned up temporary file after download failure");
-                    } catch (IOException ioE) {
-                        LOGGER.error("Failed to delete temporary file", ioE);
-                    }
+                    try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
                 }
-
-                isCurrentlyDownloading = false;
-            } catch (Exception e) {
-                LOGGER.error("Unexpected error during download process:", e);
-                sendProgressMessage(client,
-                        "Unexpected error occurred. Please check the logs and try again.",
-                        ChatFormatting.RED);
-
-                if (tempFile != null) {
-                    try {
-                        Files.deleteIfExists(tempFile);
-                        LOGGER.info("Cleaned up temporary file after unexpected error");
-                    } catch (IOException ioE) {
-                        LOGGER.error("Failed to delete temporary file", ioE);
-                    }
-                }
-
                 isCurrentlyDownloading = false;
             }
         });
 
-        downloadThread.setName("WynnLOD-Downloader");
-        LOGGER.info("Starting download thread");
+        downloadThread.setName("WynnLOD-Downloader-" + mod);
         downloadThread.start();
+    }
+
+    private void installLods(Minecraft client, Path tempFile, String mod) {
+        client.execute(() -> {
+            try {
+                Thread.sleep(5000);
+
+                String serverIp = client.getCurrentServer() != null ? client.getCurrentServer().ip : "";
+
+                Path targetDir;
+                if ("dh".equals(mod)) {
+                    String dhFolder = serverIp.replace(".", "%2E");
+                    targetDir = FabricLoader.getInstance().getGameDir()
+                            .resolve(DH_DATA_DIR).resolve(dhFolder);
+                } else {
+                    targetDir = FabricLoader.getInstance().getGameDir()
+                            .resolve(VOXY_DATA_DIR).resolve(serverIp);
+                }
+
+                Files.createDirectories(targetDir);
+
+                Minecraft.getInstance().disconnect(new DisconnectedScreen(
+                        new TitleScreen(),
+                        Component.literal("Disconnected"),
+                        Component.literal("Installing LODs...").withStyle(ChatFormatting.GOLD)
+                ), false);
+
+                Thread.sleep(2000);
+
+                LOGGER.info("Extracting LODs into: {}", targetDir);
+                try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(tempFile))) {
+                    ZipEntry entry;
+                    while ((entry = zis.getNextEntry()) != null) {
+                        Path outputPath = targetDir.resolve(entry.getName());
+                        if (entry.isDirectory()) {
+                            Files.createDirectories(outputPath);
+                        } else {
+                            Files.createDirectories(outputPath.getParent());
+                            Files.copy(zis, outputPath, StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        zis.closeEntry();
+                    }
+                }
+
+                Files.deleteIfExists(tempFile);
+
+                if ("dh".equals(mod)) {
+                    config.hasDownloadedDhLods = true;
+                    config.installedDhIp = serverIp;
+                } else {
+                    config.hasDownloadedVoxyLods = true;
+                    config.installedVoxyIp = serverIp;
+                }
+                config.save();
+
+                LOGGER.info("LOD installation complete for {} on {}", mod, serverIp);
+
+            } catch (Exception e) {
+                LOGGER.error("Error during LOD installation:", e);
+                try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+            } finally {
+                isCurrentlyDownloading = false;
+            }
+        });
+    }
+
+    private void sendChat(Minecraft client, String message, ChatFormatting color) {
+        if (client.player != null) {
+            client.player.displayClientMessage(Component.literal(message).withStyle(color), false);
+        }
+    }
+
+    private void sendProgressMessage(Minecraft client, String message, ChatFormatting color) {
+        if (client.player != null) {
+            client.execute(() -> client.player.displayClientMessage(
+                    Component.literal(message).withStyle(color), false));
+        }
     }
 }

@@ -10,15 +10,18 @@ public class Config {
     private static Path configPath;
     private static Path configDir;
 
-    public boolean hasDeclined = false;
-    public boolean hasDownloadedLODs = false;
-    public String currentLODVersion = "";
+    public boolean hasDownloadedDhLods   = false;
+    public boolean hasDownloadedVoxyLods = false;
+    public boolean hasDeclinedDh         = false;
+    public boolean hasDeclinedVoxy       = false;
+    public String  installedDhIp         = "";
+    public String  installedVoxyIp       = "";
+    public String  currentLODVersion     = "";
 
     public static Config load(Path path) throws IOException {
         configPath = path;
         configDir = path.getParent();
 
-        // Ensure the config directory exists
         Files.createDirectories(configDir);
 
         Config config;
@@ -26,9 +29,7 @@ public class Config {
             config = gson.fromJson(new String(Files.readAllBytes(configPath)), Config.class);
         } else {
             config = new Config();
-            // Create subdirectories needed for the mod
             Files.createDirectories(configDir.resolve("temp_extract"));
-            // Create and save initial config file
             Files.createFile(configPath);
             Files.write(configPath, gson.toJson(config).getBytes());
         }
@@ -37,7 +38,6 @@ public class Config {
     }
 
     public void save() throws IOException {
-        // Ensure directory exists before saving
         Files.createDirectories(configPath.getParent());
         Files.write(configPath, gson.toJson(this).getBytes());
     }

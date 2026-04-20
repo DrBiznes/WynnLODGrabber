@@ -1,20 +1,22 @@
 package me.jamino.wynnlodgrabber;
 
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.network.chat.Component;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public class LodPromptScreen extends Screen {
     private final Screen parent;
     private final Runnable onAccept;
     private final Runnable onDecline;
     private final Runnable onNotNow;
+    private final String modLabel;
 
-    public LodPromptScreen(Screen parent, Runnable onAccept, Runnable onDecline, Runnable onNotNow) {
-        super(Component.translatable("screen.wynnlodgrabber.title"));
+    public LodPromptScreen(Screen parent, String modLabel, Runnable onAccept, Runnable onDecline, Runnable onNotNow) {
+        super(Component.literal("Wynncraft LOD Download — " + modLabel));
         this.parent = parent;
+        this.modLabel = modLabel;
         this.onAccept = onAccept;
         this.onDecline = onDecline;
         this.onNotNow = onNotNow;
@@ -30,7 +32,6 @@ public class LodPromptScreen extends Screen {
         int startX = (width - totalWidth) / 2;
         int y = height / 2 + 20;
 
-        // Accept button
         this.addRenderableWidget(Button.builder(
                         Component.translatable("screen.wynnlodgrabber.accept"),
                         button -> {
@@ -40,7 +41,6 @@ public class LodPromptScreen extends Screen {
                 .bounds(startX, y, buttonWidth, buttonHeight)
                 .build());
 
-        // Not Right Now button
         this.addRenderableWidget(Button.builder(
                         Component.translatable("screen.wynnlodgrabber.notnow"),
                         button -> {
@@ -50,7 +50,6 @@ public class LodPromptScreen extends Screen {
                 .bounds(startX + buttonWidth + spacing, y, buttonWidth, buttonHeight)
                 .build());
 
-        // Decline button
         this.addRenderableWidget(Button.builder(
                         Component.translatable("screen.wynnlodgrabber.decline"),
                         button -> {
@@ -73,7 +72,7 @@ public class LodPromptScreen extends Screen {
         guiGraphics.drawCenteredString(this.font, getTitle(), width / 2, height / 2 - 40, 0xFFFFFF);
 
         String[] descriptionLines = {
-                "Would you like to download the Wynncraft LODs?",
+                "Would you like to download the Wynncraft LODs for " + modLabel + "?",
                 "This will allow you to see further in the game.",
                 "The download is approximately 1.5GB."
         };
