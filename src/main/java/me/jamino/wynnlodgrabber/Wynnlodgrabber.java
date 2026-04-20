@@ -357,68 +357,72 @@ public class Wynnlodgrabber implements ModInitializer {
         downloadThread.start();
     }
 
+    // Called from the background download thread — do NOT switch to main thread here except for disconnect
     private void installLods(Minecraft client, Path tempFile, String mod) {
-        client.execute(() -> {
-            try {
-                Thread.sleep(5000);
-
-                String serverIp = client.getCurrentServer() != null ? client.getCurrentServer().ip : "";
-
-                Path targetDir;
-                if ("dh".equals(mod)) {
-                    String dhFolder = serverIp.replace(".", "%2E");
-                    targetDir = FabricLoader.getInstance().getGameDir()
-                            .resolve(DH_DATA_DIR).resolve(dhFolder);
-                } else {
-                    targetDir = FabricLoader.getInstance().getGameDir()
-                            .resolve(VOXY_DATA_DIR).resolve(serverIp);
-                }
-
-                Files.createDirectories(targetDir);
-
-                Minecraft.getInstance().disconnect(new DisconnectedScreen(
-                        new TitleScreen(),
-                        Component.literal("Disconnected"),
-                        Component.literal("Installing LODs...").withStyle(ChatFormatting.GOLD)
-                ), false);
-
-                Thread.sleep(2000);
-
-                LOGGER.info("Extracting LODs into: {}", targetDir);
-                try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(tempFile))) {
-                    ZipEntry entry;
-                    while ((entry = zis.getNextEntry()) != null) {
-                        Path outputPath = targetDir.resolve(entry.getName());
-                        if (entry.isDirectory()) {
-                            Files.createDirectories(outputPath);
-                        } else {
-                            Files.createDirectories(outputPath.getParent());
-                            Files.copy(zis, outputPath, StandardCopyOption.REPLACE_EXISTING);
-                        }
-                        zis.closeEntry();
-                    }
-                }
-
-                Files.deleteIfExists(tempFile);
-
-                if ("dh".equals(mod)) {
-                    config.hasDownloadedDhLods = true;
-                    config.installedDhIp = serverIp;
-                } else {
-                    config.hasDownloadedVoxyLods = true;
-                    config.installedVoxyIp = serverIp;
-                }
-                config.save();
-
-                LOGGER.info("LOD installation complete for {} on {}", mod, serverIp);
-
-            } catch (Exception e) {
-                LOGGER.error("Error during LOD installation:", e);
-                try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
-            } finally {
-                isCurrentlyDownloading = false;
+        try {
+            // Countdown in background thread — no game freeze
+            for (int i = 5; i >= 1; i--) {
+                sendProgressMessage(client, "Disconnecting to install LODs in " + i + "...", ChatFormatting.GOLD);
+                Thread.sleep(1000);
             }
-        });
+
+            // Capture IP before disconnecting
+            final String serverIp = client.getCurrentServer() != null ? client.getCurrentServer().ip : "";
+
+            // Only the disconnect itself goes on the main thread
+            client.execute(() -> Minecraft.getInstance().disconnect(new DisconnectedScreen(
+                    new TitleScreen(),
+                    Component.literal("Disconnected"),
+                    Component.literal("Installing LODs — please wait...").withStyle(ChatFormatting.GOLD)
+            ), false));
+
+            // Give the disconnect a moment to settle, still in background thread
+            Thread.sleep(2000);
+
+            Path targetDir;
+            if ("dh".equals(mod)) {
+                targetDir = FabricLoader.getInstance().getGameDir()
+                        .resolve(DH_DATA_DIR).resolve(serverIp.replace(".", "%2E"));
+            } else {
+                targetDir = FabricLoader.getInstance().getGameDir()
+                        .resolve(VOXY_DATA_DIR).resolve(serverIp);
+            }
+            Files.createDirectories(targetDir);
+
+            LOGGER.info("Extracting {} LODs into: {}", mod, targetDir);
+            try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(tempFile))) {
+                ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    Path outputPath = targetDir.resolve(entry.getName());
+                    if (entry.isDirectory()) {
+                        Files.createDirectories(outputPath);
+                    } else {
+                        Files.createDirectories(outputPath.getParent());
+                        Files.copy(zis, outputPath, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    zis.closeEntry();
+                }
+            }
+
+            Files.deleteIfExists(tempFile);
+
+            if ("dh".equals(mod)) {
+                config.hasDownloadedDhLods = true;
+                config.installedDhIp = serverIp;
+            } else {
+                config.hasDownloadedVoxyLods = true;
+                config.installedVoxyIp = serverIp;
+            }
+            config.save();
+
+            LOGGER.info("LOD installation complete for {} on {}", mod, serverIp);
+
+        } catch (Exception e) {
+            LOGGER.error("Error during LOD installation:", e);
+            try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+        } finally {
+            isCurrentlyDownloading = false;
+        }
     }
 
     private void sendChat(Minecraft client, String message, ChatFormatting color) {

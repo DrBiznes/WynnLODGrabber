@@ -28,7 +28,7 @@ public class ConflictScreen extends Screen {
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         guiGraphics.drawCenteredString(this.font, getTitle(), this.width / 2, this.height / 2 - 50, 0xFF5555);
 
@@ -44,8 +44,6 @@ public class ConflictScreen extends Screen {
             guiGraphics.drawCenteredString(this.font, Component.literal(lines[i]),
                     this.width / 2, startY + (i * lineHeight), 0xFFFFFF);
         }
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     @Override
