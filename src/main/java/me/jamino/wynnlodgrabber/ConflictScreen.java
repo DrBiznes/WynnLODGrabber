@@ -30,7 +30,7 @@ public class ConflictScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
-        guiGraphics.drawCenteredString(this.font, getTitle(), this.width / 2, this.height / 2 - 50, 0xFF5555);
+        guiGraphics.drawCenteredString(this.font, getTitle(), this.width / 2, this.height / 2 - 50, 0xFFFF5555);
 
         String[] lines = {
             "Both Distant Horizons and Voxy are installed.",
@@ -42,7 +42,7 @@ public class ConflictScreen extends Screen {
         int startY = this.height / 2 - 20;
         for (int i = 0; i < lines.length; i++) {
             guiGraphics.drawCenteredString(this.font, Component.literal(lines[i]),
-                    this.width / 2, startY + (i * lineHeight), 0xFFFFFF);
+                    this.width / 2, startY + (i * lineHeight), 0xFFFFFFFF);
         }
     }
 

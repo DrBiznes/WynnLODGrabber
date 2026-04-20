@@ -69,12 +69,13 @@ public class LodPromptScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
-        guiGraphics.drawCenteredString(this.font, getTitle(), width / 2, height / 2 - 40, 0xFFFFFF);
+        guiGraphics.drawCenteredString(this.font, getTitle(), width / 2, height / 2 - 40, 0xFFFFFFFF);
 
+        String downloadSize = "Distant Horizons".equals(modLabel) ? "1.5GB" : "500MB";
         String[] descriptionLines = {
                 "Would you like to download the Wynncraft LODs for " + modLabel + "?",
                 "This will allow you to see further in the game.",
-                "The download is approximately 1.5GB."
+                "The download is approximately " + downloadSize + "."
         };
 
         int lineHeight = this.font.lineHeight + 2;
@@ -86,7 +87,7 @@ public class LodPromptScreen extends Screen {
                     Component.literal(descriptionLines[i]),
                     width / 2,
                     startY + (i * lineHeight),
-                    0xFFFFFF
+                    0xFFFFFFFF
             );
         }
     }
