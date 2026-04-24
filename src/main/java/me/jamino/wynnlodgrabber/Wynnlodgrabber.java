@@ -29,7 +29,7 @@ import com.wynntils.models.character.CharacterModel;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
 public class Wynnlodgrabber implements ModInitializer {
-    private static final String DH_DOWNLOAD_URL   = "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-11-05-24/wynnlods.zip";
+    private static final String DH_DOWNLOAD_URL   = "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-04-19-26/wynnlodDHfruma.zip";
     private static final String VOXY_DOWNLOAD_URL = "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-04-19-26/frumavoxylods.zip";
     private static final String DH_DATA_DIR       = "Distant_Horizons_server_data";
     private static final String VOXY_DATA_DIR     = ".voxy/saves";
@@ -368,25 +368,10 @@ public class Wynnlodgrabber implements ModInitializer {
 
     // Called from the background download thread — do NOT switch to main thread here except for disconnect
     private void installLods(Minecraft client, Path tempFile, String mod) {
+        Path stagingDir = null;
         try {
-            // Countdown in background thread — no game freeze
-            for (int i = 5; i >= 1; i--) {
-                sendProgressMessage(client, "Disconnecting to install LODs in " + i + "...", ChatFormatting.GOLD);
-                Thread.sleep(1000);
-            }
-
-            // Capture IP before disconnecting
+            // Capture IP before anything else
             final String serverIp = client.getCurrentServer() != null ? client.getCurrentServer().ip : "";
-
-            // Only the disconnect itself goes on the main thread
-            client.execute(() -> Minecraft.getInstance().disconnect(new DisconnectedScreen(
-                    new TitleScreen(),
-                    Component.literal("Disconnected"),
-                    Component.literal("Installing LODs — please wait...").withStyle(ChatFormatting.GOLD)
-            ), false));
-
-            // Give the disconnect a moment to settle, still in background thread
-            Thread.sleep(2000);
 
             Path targetDir;
             if ("dh".equals(mod)) {
@@ -396,13 +381,23 @@ public class Wynnlodgrabber implements ModInitializer {
                 targetDir = FabricLoader.getInstance().getGameDir()
                         .resolve(VOXY_DATA_DIR).resolve(serverIp);
             }
-            Files.createDirectories(targetDir);
 
-            LOGGER.info("Extracting {} LODs into: {}", mod, targetDir);
+            // Extract into a staging directory BEFORE disconnecting. This avoids touching DH's
+            // live data directory while DH has its GPU resources active — on Apple Silicon the
+            // Metal command-buffer completion callbacks are asynchronous and crash if the DH
+            // objects they reference are freed mid-render (the old code extracted after disconnect
+            // with only a 2-second sleep, which was a race on M-series Macs).
+            Path configDir = FabricLoader.getInstance().getConfigDir().resolve("wynnlodgrabber");
+            stagingDir = configDir.resolve("staging_" + mod);
+            deleteDirectory(stagingDir);
+            Files.createDirectories(stagingDir);
+
+            sendProgressMessage(client, "Preparing LODs for installation...", ChatFormatting.YELLOW);
+            LOGGER.info("Extracting {} LODs to staging: {}", mod, stagingDir);
             try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(tempFile))) {
                 ZipEntry entry;
                 while ((entry = zis.getNextEntry()) != null) {
-                    Path outputPath = targetDir.resolve(entry.getName());
+                    Path outputPath = stagingDir.resolve(entry.getName());
                     if (entry.isDirectory()) {
                         Files.createDirectories(outputPath);
                     } else {
@@ -412,8 +407,31 @@ public class Wynnlodgrabber implements ModInitializer {
                     zis.closeEntry();
                 }
             }
-
             Files.deleteIfExists(tempFile);
+
+            // Countdown in background thread — no game freeze
+            for (int i = 5; i >= 1; i--) {
+                sendProgressMessage(client, "Disconnecting to install LODs in " + i + "...", ChatFormatting.GOLD);
+                Thread.sleep(1000);
+            }
+
+            // Only the disconnect itself goes on the main thread
+            client.execute(() -> Minecraft.getInstance().disconnect(new DisconnectedScreen(
+                    new TitleScreen(),
+                    Component.literal("Disconnected"),
+                    Component.literal("Installing LODs — please wait...").withStyle(ChatFormatting.GOLD)
+            ), false));
+
+            // Wait for DH to fully release its GPU resources. On Apple Silicon, Metal command-buffer
+            // completion callbacks fire asynchronously; 5 seconds is well beyond any in-flight frame.
+            Thread.sleep(5000);
+
+            // Move staged files into the final DH/Voxy directory now that DH is fully shut down.
+            LOGGER.info("Moving staged {} LODs into: {}", mod, targetDir);
+            Files.createDirectories(targetDir);
+            copyDirectory(stagingDir, targetDir);
+            deleteDirectory(stagingDir);
+            stagingDir = null;
 
             if ("dh".equals(mod)) {
                 config.hasDownloadedDhLods = true;
@@ -430,7 +448,31 @@ public class Wynnlodgrabber implements ModInitializer {
             LOGGER.error("Error during LOD installation:", e);
             try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
         } finally {
+            if (stagingDir != null) {
+                try { deleteDirectory(stagingDir); } catch (IOException ignored) {}
+            }
             isCurrentlyDownloading = false;
+        }
+    }
+
+    private void copyDirectory(Path src, Path dest) throws IOException {
+        try (var stream = Files.walk(src)) {
+            for (Path path : (Iterable<Path>) stream::iterator) {
+                Path target = dest.resolve(src.relativize(path));
+                if (Files.isDirectory(path)) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.copy(path, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    private void deleteDirectory(Path dir) throws IOException {
+        if (!Files.exists(dir)) return;
+        try (var stream = Files.walk(dir)) {
+            stream.sorted(java.util.Comparator.reverseOrder())
+                  .forEach(p -> { try { Files.delete(p); } catch (IOException ignored) {} });
         }
     }
 
