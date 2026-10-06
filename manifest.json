@@ -1,0 +1,17 @@
+{
+  "version": "LOD-04-19-26",
+  "packages": {
+    "dh": {
+      "url": "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-04-19-26/wynnlodDHfruma.zip",
+      "size": 1426025322,
+      "extractedSize": 1708158976,
+      "sha256": "ea680caf0c81481d06f0b533081fd6e43206c0270add5ebea8399096b4cce0cb"
+    },
+    "voxy": {
+      "url": "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-04-19-26/frumavoxylods.zip",
+      "size": 592327286,
+      "extractedSize": 619917136,
+      "sha256": "2b494667869473c0133cc3de7c25b9b41b52382b1de79c7e79068139aad3f725"
+    }
+  }
+}
