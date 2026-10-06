@@ -31,6 +31,8 @@ public class Wynnlodgrabber implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger("wynnlodgrabber");
 
     private static final int INSTALL_SETTLE_SECONDS = 5;
+    /** LOD release that every install from before versions were recorded came from. */
+    private static final String LEGACY_LOD_VERSION = "LOD-04-19-26";
 
     private static Config config;
     private static volatile LodProgress activeDownload = null;
@@ -51,6 +53,9 @@ public class Wynnlodgrabber implements ModInitializer {
     private boolean pendingPromptHandled = false;
     private boolean autoInstallTried = false;
     private boolean updateCheckStarted = false;
+    private boolean updatePromptShown = false;
+    /** Set when the published manifest is newer than what the player has installed. */
+    private static volatile String availableUpdateVersion = null;
     private boolean sessionHadWorld = false;
     private DhCompat dhCompat = null;
 
@@ -212,6 +217,14 @@ public class Wynnlodgrabber implements ModInitializer {
                 return;
             }
 
+            // Already installed, but a newer LOD release was published: ask once per session.
+            String updateVersion = availableUpdateVersion;
+            if (updateVersion != null && !updatePromptShown && !updateVersion.equals(config.skippedLodVersion)) {
+                updatePromptShown = true;
+                showUpdatePrompt(client, updateVersion);
+                return;
+            }
+
             if (dhLoaded && !config.hasDownloadedDhLods && !config.hasDeclinedDh) {
                 showDownloadPrompt(client, "Distant Horizons", "dh");
             } else if (voxyLoaded && !config.hasDownloadedVoxyLods && !config.hasDeclinedVoxy) {
@@ -235,6 +248,33 @@ public class Wynnlodgrabber implements ModInitializer {
         )));
     }
 
+    private void showUpdatePrompt(Minecraft client, String version) {
+        String mod = dhLoaded ? "dh" : "voxy";
+        String label = dhLoaded ? "Distant Horizons" : "Voxy";
+        client.execute(() -> client.setScreen(new LodPromptScreen(
+                client.screen,
+                label,
+                version,
+                () -> onYesCommand(client, mod),
+                () -> {
+                    config.skippedLodVersion = version;
+                    saveConfig();
+                    sendChat(client, "Skipping " + version + ". You'll be asked again when newer LODs are published, "
+                            + "or update any time with /wynn_lod_update.", ChatFormatting.YELLOW);
+                },
+                () -> sendChat(client, "You can update any time with /wynn_lod_update.", ChatFormatting.YELLOW)
+        )));
+    }
+
+    private void updateCommand(Minecraft client) {
+        if (availableUpdateVersion == null) {
+            sendChat(client, "Your LODs are up to date. Use /wynn_lod_force to reinstall them anyway.",
+                    ChatFormatting.YELLOW);
+            return;
+        }
+        startDownload(client, dhLoaded ? "dh" : "voxy");
+    }
+
     // ---- commands ---------------------------------------------------------------------------------
 
     private void registerCommands() {
@@ -256,6 +296,12 @@ public class Wynnlodgrabber implements ModInitializer {
             dispatcher.register(literal("wynn_lod_force")
                     .executes(context -> {
                         forceDownload(Minecraft.getInstance());
+                        return 1;
+                    }));
+
+            dispatcher.register(literal("wynn_lod_update")
+                    .executes(context -> {
+                        updateCommand(Minecraft.getInstance());
                         return 1;
                     }));
 
@@ -321,6 +367,11 @@ public class Wynnlodgrabber implements ModInitializer {
                     + Math.round(download.fraction() * 100) + "%", ChatFormatting.WHITE);
         } else {
             sendChat(client, "- Currently downloading: false", ChatFormatting.WHITE);
+        }
+
+        if (availableUpdateVersion != null) {
+            sendClickable(client, "- Update available (" + availableUpdateVersion + "). Click here to update.",
+                    "/wynn_lod_update", ChatFormatting.GREEN);
         }
 
         if (hasPending()) {
@@ -524,6 +575,7 @@ public class Wynnlodgrabber implements ModInitializer {
         config.pendingIp = "";
         config.pendingVersion = "";
         pendingServer = null;
+        availableUpdateVersion = null;
         config.save();
     }
 
@@ -566,7 +618,10 @@ public class Wynnlodgrabber implements ModInitializer {
 
     // ---- updates ----------------------------------------------------------------------------------
 
-    /** Once per session, tell players who already installed LODs if a newer LOD release was published. */
+    /**
+     * Once per session, compare the published LOD release with what is installed. If it differs,
+     * {@link #availableUpdateVersion} is set and {@link #checkCharacterSelected} prompts the player.
+     */
     private void checkForLodUpdate(Minecraft client) {
         if (updateCheckStarted) return;
         updateCheckStarted = true;
@@ -575,15 +630,17 @@ public class Wynnlodgrabber implements ModInitializer {
             LodManifest manifest = LodManifest.fetch();
             if (manifest == null) return;
 
-            boolean dh = dhLoaded;
-            boolean installed = dh ? config.hasDownloadedDhLods : config.hasDownloadedVoxyLods;
-            String installedVersion = dh ? config.installedDhVersion : config.installedVoxyVersion;
-            // Installs from before versions were tracked have no recorded version; we can't tell, so stay quiet.
-            if (!installed || installedVersion.isEmpty() || installedVersion.equals(manifest.version)) return;
+            String mod = dhLoaded ? "dh" : "voxy";
+            boolean installed = dhLoaded ? config.hasDownloadedDhLods : config.hasDownloadedVoxyLods;
+            String installedVersion = dhLoaded ? config.installedDhVersion : config.installedVoxyVersion;
+            // Installs from before versions were recorded all came from the release that existed then.
+            if (installedVersion.isEmpty()) installedVersion = LEGACY_LOD_VERSION;
+
+            if (!installed || manifest.get(mod) == null || installedVersion.equals(manifest.version)) return;
             if (hasPending() || isDownloading()) return;
 
-            sendClickable(client, "New Wynncraft LODs are available (" + manifest.version
-                    + "). Click here to update.", "/wynn_lod_yes", ChatFormatting.GREEN);
+            LOGGER.info("LOD update available: installed {}, published {}", installedVersion, manifest.version);
+            availableUpdateVersion = manifest.version;
         }, "WynnLOD-UpdateCheck");
         checker.setDaemon(true);
         checker.start();

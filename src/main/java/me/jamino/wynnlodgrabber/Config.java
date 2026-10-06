@@ -18,6 +18,8 @@ public class Config {
     public String  installedVoxyIp       = "";
     public String  installedDhVersion    = "";
     public String  installedVoxyVersion  = "";
+    /** LOD release the player chose "Skip This Version" for; they are asked again only for a newer one. */
+    public String  skippedLodVersion     = "";
 
     // A fully downloaded + extracted LOD package waiting in the staging directory to be swapped in.
     public String  pendingMod            = "";

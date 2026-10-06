@@ -12,14 +12,27 @@ public class LodPromptScreen extends Screen {
     private final Runnable onDecline;
     private final Runnable onNotNow;
     private final String modLabel;
+    /** Non-null when this prompt offers an update to already-installed LODs rather than a first download. */
+    private final String updateVersion;
 
     public LodPromptScreen(Screen parent, String modLabel, Runnable onAccept, Runnable onDecline, Runnable onNotNow) {
-        super(Component.literal("Wynncraft LOD Download — " + modLabel));
+        this(parent, modLabel, null, onAccept, onDecline, onNotNow);
+    }
+
+    public LodPromptScreen(Screen parent, String modLabel, String updateVersion,
+                           Runnable onAccept, Runnable onDecline, Runnable onNotNow) {
+        super(Component.literal((updateVersion != null ? "Wynncraft LOD Update — " : "Wynncraft LOD Download — ")
+                + modLabel));
         this.parent = parent;
         this.modLabel = modLabel;
+        this.updateVersion = updateVersion;
         this.onAccept = onAccept;
         this.onDecline = onDecline;
         this.onNotNow = onNotNow;
+    }
+
+    private Component label(String key, String updateText) {
+        return updateVersion != null ? Component.literal(updateText) : Component.translatable(key);
     }
 
     @Override
@@ -33,7 +46,7 @@ public class LodPromptScreen extends Screen {
         int y = height / 2 + 30;
 
         this.addRenderableWidget(Button.builder(
-                        Component.translatable("screen.wynnlodgrabber.accept"),
+                        label("screen.wynnlodgrabber.accept", "Update LODs"),
                         button -> {
                             onAccept.run();
                             Minecraft.getInstance().setScreen(null);
@@ -51,7 +64,7 @@ public class LodPromptScreen extends Screen {
                 .build());
 
         this.addRenderableWidget(Button.builder(
-                        Component.translatable("screen.wynnlodgrabber.decline"),
+                        label("screen.wynnlodgrabber.decline", "Skip This Version"),
                         button -> {
                             onDecline.run();
                             Minecraft.getInstance().setScreen(null);
@@ -73,12 +86,17 @@ public class LodPromptScreen extends Screen {
 
         LodManifest.Package pkg = LodManifest.current().get("Distant Horizons".equals(modLabel) ? "dh" : "voxy");
         String downloadSize = pkg != null ? LodProgress.formatBytes(pkg.size) : "a large file";
-        String[] descriptionLines = {
-                "Would you like to download the Wynncraft LODs for " + modLabel + "?",
-                "This will allow you to see further in the game.",
-                "The download is approximately " + downloadSize + " and runs in the background - keep playing!",
-                "Afterwards you'll be asked to reconnect once to finish installing."
-        };
+        String[] descriptionLines = updateVersion != null
+                ? new String[] {
+                        "Updated Wynncraft LODs are available for " + modLabel + " (" + updateVersion + ").",
+                        "Updating replaces your current Wynncraft LODs with the latest ones.",
+                        "The download is approximately " + downloadSize + " and runs in the background - keep playing!",
+                        "Afterwards you'll be asked to reconnect once to finish installing."}
+                : new String[] {
+                        "Would you like to download the Wynncraft LODs for " + modLabel + "?",
+                        "This will allow you to see further in the game.",
+                        "The download is approximately " + downloadSize + " and runs in the background - keep playing!",
+                        "Afterwards you'll be asked to reconnect once to finish installing."};
 
         int lineHeight = this.font.lineHeight + 2;
         int startY = height / 2 - 20;

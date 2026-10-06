@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1 — Unreleased
+### Added
+- **LOD update prompt** — if you already have LODs installed and a newer LOD release is published, you're now asked (once per session) whether to update: **Update LODs**, **Not Right Now**, or **Skip This Version** (you're asked again only for a newer release). `/wynn_lod_update` updates on demand.
+- Installs made before LOD versions were tracked are treated as `LOD-04-19-26`, so they get the prompt too.
+
+---
+
 ## 1.3.0 — 2026-10-06
 ### Added
 - **Background downloads with a progress toast** — the LOD download no longer spams chat or asks you to stay put; progress, speed and time remaining show in a corner toast while you keep playing. `/wynn_lod_cancel` stops it.
