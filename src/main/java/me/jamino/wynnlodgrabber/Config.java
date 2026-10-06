@@ -16,7 +16,13 @@ public class Config {
     public boolean hasDeclinedVoxy       = false;
     public String  installedDhIp         = "";
     public String  installedVoxyIp       = "";
-    public String  currentLODVersion     = "";
+    public String  installedDhVersion    = "";
+    public String  installedVoxyVersion  = "";
+
+    // A fully downloaded + extracted LOD package waiting in the staging directory to be swapped in.
+    public String  pendingMod            = "";
+    public String  pendingIp             = "";
+    public String  pendingVersion        = "";
 
     public static Config load(Path path) throws IOException {
         configPath = path;
@@ -37,7 +43,7 @@ public class Config {
         return config;
     }
 
-    public void save() throws IOException {
+    public synchronized void save() throws IOException {
         Files.createDirectories(configPath.getParent());
         Files.write(configPath, gson.toJson(this).getBytes());
     }

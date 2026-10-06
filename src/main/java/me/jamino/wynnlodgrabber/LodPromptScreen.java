@@ -30,7 +30,7 @@ public class LodPromptScreen extends Screen {
 
         int totalWidth = buttonWidth * 3 + spacing * 2;
         int startX = (width - totalWidth) / 2;
-        int y = height / 2 + 20;
+        int y = height / 2 + 30;
 
         this.addRenderableWidget(Button.builder(
                         Component.translatable("screen.wynnlodgrabber.accept"),
@@ -71,11 +71,13 @@ public class LodPromptScreen extends Screen {
 
         guiGraphics.drawCenteredString(this.font, getTitle(), width / 2, height / 2 - 40, 0xFFFFFFFF);
 
-        String downloadSize = "Distant Horizons".equals(modLabel) ? "1.5GB" : "500MB";
+        LodManifest.Package pkg = LodManifest.current().get("Distant Horizons".equals(modLabel) ? "dh" : "voxy");
+        String downloadSize = pkg != null ? LodProgress.formatBytes(pkg.size) : "a large file";
         String[] descriptionLines = {
                 "Would you like to download the Wynncraft LODs for " + modLabel + "?",
                 "This will allow you to see further in the game.",
-                "The download is approximately " + downloadSize + "."
+                "The download is approximately " + downloadSize + " and runs in the background - keep playing!",
+                "Afterwards you'll be asked to reconnect once to finish installing."
         };
 
         int lineHeight = this.font.lineHeight + 2;
