@@ -29,8 +29,8 @@ dependencies {
     // Distant Horizons mod (runtime only) - update version tag for 1.21.11 build
     modRuntimeOnly "maven.modrinth:DistantHorizons:2.4.5-b-1.21.11"
 
-    // Wynntils dependency - replace jar with 1.21.11 build when available
-    modImplementation files("libs/wynntils-${project.wynntils_version}-fabric+MC-1.21.11.jar")
+    // Wynntils from Modrinth Maven (version ID for wynntils_version, fabric build)
+    modImplementation "maven.modrinth:wynntils:${project.wynntils_modrinth_id}"
 
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
