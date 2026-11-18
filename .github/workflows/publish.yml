@@ -59,6 +59,5 @@ jobs:
           java: 21
           dependencies: |
             fabric-api(required){modrinth:fabric-api}{curseforge:fabric-api}
-            wynntils(required){modrinth:wynntils}{curseforge:wynntils}
             distanthorizons(optional){modrinth:distanthorizons}{curseforge:distant-horizons}
             voxy(optional){modrinth:voxy}#(ignore:curseforge)

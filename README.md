@@ -6,6 +6,6 @@ Supports both **Distant Horizons** and **Voxy** — the mod detects which one yo
 
 ### Installation
 
-WynnLODGrabber is a mod built for the [Fabric Loader](https://fabricmc.net/). It requires [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) and [Wynntils](https://modrinth.com/mod/wynntils), plus either [Distant Horizons](https://modrinth.com/mod/distanthorizons) or [Voxy](https://modrinth.com/mod/voxy) (not both).
+WynnLODGrabber is a mod built for the [Fabric Loader](https://fabricmc.net/). It requires [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api), plus either [Distant Horizons](https://modrinth.com/mod/distanthorizons) or [Voxy](https://modrinth.com/mod/voxy) (not both).
 
 > **Modpack creators:** You can include any `*.wynncraft.com` address in your pack — custom IPs like `igbarvonsquid.wynncraft.com` are fully supported. The mod recognizes any Wynncraft subdomain and installs the LODs into the correct folder automatically.

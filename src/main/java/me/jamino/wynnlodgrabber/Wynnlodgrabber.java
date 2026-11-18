@@ -22,9 +22,6 @@ import java.util.concurrent.CancellationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.wynntils.core.components.Models;
-import com.wynntils.models.character.CharacterModel;
-
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
 
 public class Wynnlodgrabber implements ModInitializer {
@@ -39,7 +36,6 @@ public class Wynnlodgrabber implements ModInitializer {
     private static volatile LodInstallJob installJob = null;
     /** The server we were connected to when the pending package was downloaded; used to rejoin after install. */
     private static volatile ServerData pendingServer = null;
-    private static boolean wynntilsLoaded          = false;
     private static boolean dhLoaded                = false;
     private static boolean voxyLoaded              = false;
 
@@ -68,12 +64,6 @@ public class Wynnlodgrabber implements ModInitializer {
             config = Config.load(configPath);
         } catch (IOException e) {
             LOGGER.error("Failed to initialize mod directories:", e);
-            return;
-        }
-
-        wynntilsLoaded = FabricLoader.getInstance().isModLoaded("wynntils");
-        if (!wynntilsLoaded) {
-            LOGGER.error("Wynntils mod not found! This mod requires Wynntils to function.");
             return;
         }
 
@@ -157,7 +147,7 @@ public class Wynnlodgrabber implements ModInitializer {
 
         tryAutoInstallAtTitle(client);
 
-        if (!wynntilsLoaded || client.player == null) return;
+        if (client.player == null) return;
 
         if (readyPromptQueued && client.screen == null && hasPending() && !isInstallRunning()) {
             readyPromptQueued = false;
@@ -193,8 +183,7 @@ public class Wynnlodgrabber implements ModInitializer {
 
     private void checkCharacterSelected(Minecraft client) {
         try {
-            CharacterModel character = Models.Character;
-            if (!character.hasCharacter() || isDownloading() || isInstallRunning()) {
+            if (!WynnCharacter.hasCharacter(client) || isDownloading() || isInstallRunning()) {
                 characterReadyChecks = 0;
                 return;
             }
