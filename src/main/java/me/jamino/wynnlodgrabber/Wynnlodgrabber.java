@@ -135,13 +135,13 @@ public class Wynnlodgrabber implements ModInitializer {
                 && !config.installedDhIp.isEmpty()
                 && !serverIp.equals(config.installedDhIp)) {
             sendChat(client, "DH LODs were installed for " + config.installedDhIp
-                    + ". Use /wynn_lod_force to reinstall for this server.", ChatFormatting.YELLOW);
+                    + ". Use /wynnlod force to reinstall for this server.", ChatFormatting.YELLOW);
         }
         if (voxyLoaded && config.hasDownloadedVoxyLods
                 && !config.installedVoxyIp.isEmpty()
                 && !serverIp.equals(config.installedVoxyIp)) {
             sendChat(client, "Voxy LODs were installed for " + config.installedVoxyIp
-                    + ". Use /wynn_lod_force to reinstall for this server.", ChatFormatting.YELLOW);
+                    + ". Use /wynnlod force to reinstall for this server.", ChatFormatting.YELLOW);
         }
 
         checkForLodUpdate(client);
@@ -260,15 +260,15 @@ public class Wynnlodgrabber implements ModInitializer {
                     config.skippedLodVersion = version;
                     saveConfig();
                     sendChat(client, "Skipping " + version + ". You'll be asked again when newer LODs are published, "
-                            + "or update any time with /wynn_lod_update.", ChatFormatting.YELLOW);
+                            + "or update any time with /wynnlod update.", ChatFormatting.YELLOW);
                 },
-                () -> sendChat(client, "You can update any time with /wynn_lod_update.", ChatFormatting.YELLOW)
+                () -> sendChat(client, "You can update any time with /wynnlod update.", ChatFormatting.YELLOW)
         )));
     }
 
     private void updateCommand(Minecraft client) {
         if (availableUpdateVersion == null) {
-            sendChat(client, "Your LODs are up to date. Use /wynn_lod_force to reinstall them anyway.",
+            sendChat(client, "Your LODs are up to date. Use /wynnlod force to reinstall them anyway.",
                     ChatFormatting.YELLOW);
             return;
         }
@@ -279,57 +279,55 @@ public class Wynnlodgrabber implements ModInitializer {
 
     private void registerCommands() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            dispatcher.register(literal("wynn_lod_yes")
-                    .executes(context -> {
-                        String mod = dhLoaded ? "dh" : "voxy";
-                        onYesCommand(Minecraft.getInstance(), mod);
-                        return 1;
-                    }));
-
-            dispatcher.register(literal("wynn_lod_no")
-                    .executes(context -> {
-                        String mod = dhLoaded ? "dh" : "voxy";
-                        onNoCommand(Minecraft.getInstance(), mod);
-                        return 1;
-                    }));
-
-            dispatcher.register(literal("wynn_lod_force")
-                    .executes(context -> {
-                        forceDownload(Minecraft.getInstance());
-                        return 1;
-                    }));
-
-            dispatcher.register(literal("wynn_lod_update")
-                    .executes(context -> {
-                        updateCommand(Minecraft.getInstance());
-                        return 1;
-                    }));
-
-            dispatcher.register(literal("wynn_lod_install")
-                    .executes(context -> {
-                        beginInstallNow(Minecraft.getInstance());
-                        return 1;
-                    }));
-
-            dispatcher.register(literal("wynn_lod_cancel")
-                    .executes(context -> {
-                        cancelOrDiscard(Minecraft.getInstance());
-                        return 1;
-                    }));
-
-            dispatcher.register(literal("wynn_lod_status")
+            var root = literal("wynnlod")
                     .executes(context -> {
                         showStatus(Minecraft.getInstance());
                         return 1;
-                    }));
+                    });
+
+            root.then(literal("yes").executes(context -> {
+                onYesCommand(Minecraft.getInstance(), dhLoaded ? "dh" : "voxy");
+                return 1;
+            }));
+
+            root.then(literal("no").executes(context -> {
+                onNoCommand(Minecraft.getInstance(), dhLoaded ? "dh" : "voxy");
+                return 1;
+            }));
+
+            root.then(literal("force").executes(context -> {
+                forceDownload(Minecraft.getInstance());
+                return 1;
+            }));
+
+            root.then(literal("update").executes(context -> {
+                updateCommand(Minecraft.getInstance());
+                return 1;
+            }));
+
+            root.then(literal("install").executes(context -> {
+                beginInstallNow(Minecraft.getInstance());
+                return 1;
+            }));
+
+            root.then(literal("cancel").executes(context -> {
+                cancelOrDiscard(Minecraft.getInstance());
+                return 1;
+            }));
+
+            root.then(literal("status").executes(context -> {
+                showStatus(Minecraft.getInstance());
+                return 1;
+            }));
 
             if (dhLoaded) {
-                dispatcher.register(literal("wynn_dh_config")
-                        .executes(context -> {
-                            showDhConfig(Minecraft.getInstance());
-                            return 1;
-                        }));
+                root.then(literal("dhconfig").executes(context -> {
+                    showDhConfig(Minecraft.getInstance());
+                    return 1;
+                }));
             }
+
+            dispatcher.register(root);
         });
     }
 
@@ -371,12 +369,12 @@ public class Wynnlodgrabber implements ModInitializer {
 
         if (availableUpdateVersion != null) {
             sendClickable(client, "- Update available (" + availableUpdateVersion + "). Click here to update.",
-                    "/wynn_lod_update", ChatFormatting.GREEN);
+                    "/wynnlod update", ChatFormatting.GREEN);
         }
 
         if (hasPending()) {
             sendClickable(client, "- Downloaded and waiting to install. Click here to install now.",
-                    "/wynn_lod_install", ChatFormatting.GREEN);
+                    "/wynnlod install", ChatFormatting.GREEN);
         }
 
         if (dhLoaded && dhCompat != null && dhCompat.isInitialized()) {
@@ -386,7 +384,7 @@ public class Wynnlodgrabber implements ModInitializer {
         boolean needsDownload = (dhLoaded && !config.hasDownloadedDhLods)
                 || (voxyLoaded && !config.hasDownloadedVoxyLods);
         if (needsDownload && !isDownloading() && !hasPending()) {
-            sendClickable(client, "Click here to download LODs", "/wynn_lod_yes", ChatFormatting.GREEN);
+            sendClickable(client, "Click here to download LODs", "/wynnlod yes", ChatFormatting.GREEN);
         }
     }
 
@@ -401,12 +399,12 @@ public class Wynnlodgrabber implements ModInitializer {
             config.hasDeclinedVoxy = true;
         }
         saveConfig();
-        sendChat(client, "You can always download the LODs later with /wynn_lod_yes", ChatFormatting.YELLOW);
+        sendChat(client, "You can always download the LODs later with /wynnlod yes", ChatFormatting.YELLOW);
     }
 
     public void forceDownload(Minecraft client) {
         if (isDownloading() || isInstallRunning()) {
-            sendChat(client, "Wait for the current download/install to finish (or /wynn_lod_cancel) first.",
+            sendChat(client, "Wait for the current download/install to finish (or /wynnlod cancel) first.",
                     ChatFormatting.RED);
             return;
         }
@@ -433,7 +431,7 @@ public class Wynnlodgrabber implements ModInitializer {
 
     private void startDownload(Minecraft client, String mod) {
         if (isDownloading()) {
-            sendChat(client, "A download is already in progress! (/wynn_lod_cancel to stop it)", ChatFormatting.RED);
+            sendChat(client, "A download is already in progress! (/wynnlod cancel to stop it)", ChatFormatting.RED);
             return;
         }
         if (isInstallRunning()) {
@@ -492,14 +490,14 @@ public class Wynnlodgrabber implements ModInitializer {
         } catch (CancellationException e) {
             LOGGER.info("LOD download cancelled");
             progress.setPhase(LodProgress.Phase.CANCELLED);
-            sendChat(client, "LOD download cancelled. Run /wynn_lod_yes any time to resume where it left off.",
+            sendChat(client, "LOD download cancelled. Run /wynnlod yes any time to resume where it left off.",
                     ChatFormatting.YELLOW);
         } catch (Exception e) {
             LOGGER.error("LOD download failed:", e);
             progress.error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             progress.setPhase(LodProgress.Phase.FAILED);
             sendClickable(client, "LOD download failed: " + progress.error
-                    + " - click here to retry (it resumes where it stopped).", "/wynn_lod_yes", ChatFormatting.RED);
+                    + " - click here to retry (it resumes where it stopped).", "/wynnlod yes", ChatFormatting.RED);
         }
     }
 
@@ -511,7 +509,7 @@ public class Wynnlodgrabber implements ModInitializer {
     }
 
     private void offerInstall(Minecraft client) {
-        sendClickable(client, "LODs downloaded! Click here to install them now.", "/wynn_lod_install",
+        sendClickable(client, "LODs downloaded! Click here to install them now.", "/wynnlod install",
                 ChatFormatting.GREEN);
         readyPromptQueued = true;
     }
@@ -522,7 +520,7 @@ public class Wynnlodgrabber implements ModInitializer {
                 label,
                 () -> beginInstallNow(client),
                 () -> sendChat(client, "OK! The LODs will be installed when you leave the server. "
-                        + "You can also run /wynn_lod_install.", ChatFormatting.YELLOW)));
+                        + "You can also run /wynnlod install.", ChatFormatting.YELLOW)));
     }
 
     private LodInstallJob newInstallJob(boolean autoRejoin, int settleSeconds) {

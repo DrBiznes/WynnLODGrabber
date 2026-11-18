@@ -20,7 +20,7 @@ import java.util.List;
  * install finished, or the error and a Retry button if it did not.
  */
 public class LodInstallScreen extends Screen {
-    private static final int REJOIN_DELAY_MS = 5000;
+    private static final int REJOIN_DELAY_MS = 30000;
     private static final int GREEN = 0xFF55FF55;
     private static final int RED = 0xFFFF5555;
     private static final int WHITE = 0xFFFFFFFF;

@@ -53,7 +53,7 @@ public class InstallReadyScreen extends Screen {
         guiGraphics.drawCenteredString(font, "Your " + modLabel + " LODs are ready!", width / 2, height / 2 - 40, 0xFF55FF55);
 
         String[] lines = {
-                "To finish, the game needs to leave Wynncraft for a few seconds.",
+                "To finish, the game needs to leave Wynncraft for about 30 seconds.",
                 "It will then reconnect you automatically.",
                 "Or pick \"Install When I Leave\" and nothing happens until you exit the server."
         };

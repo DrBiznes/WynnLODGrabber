@@ -2,17 +2,17 @@
 
 ## 1.3.1 — Unreleased
 ### Added
-- **LOD update prompt** — if you already have LODs installed and a newer LOD release is published, you're now asked (once per session) whether to update: **Update LODs**, **Not Right Now**, or **Skip This Version** (you're asked again only for a newer release). `/wynn_lod_update` updates on demand.
+- **LOD update prompt** — if you already have LODs installed and a newer LOD release is published, you're now asked (once per session) whether to update: **Update LODs**, **Not Right Now**, or **Skip This Version** (you're asked again only for a newer release). `/wynnlod update` updates on demand.
 - Installs made before LOD versions were tracked are treated as `LOD-04-19-26`, so they get the prompt too.
 
 ---
 
 ## 1.3.0 — 2026-10-06
 ### Added
-- **Background downloads with a progress toast** — the LOD download no longer spams chat or asks you to stay put; progress, speed and time remaining show in a corner toast while you keep playing. `/wynn_lod_cancel` stops it.
+- **Background downloads with a progress toast** — the LOD download no longer spams chat or asks you to stay put; progress, speed and time remaining show in a corner toast while you keep playing. `/wynnlod cancel` stops it.
 - **Resumable, verified downloads** — interrupted or stalled downloads continue where they left off (even after restarting the game), retry automatically, and are checked against a SHA-256 before anything is installed.
 - **`manifest.json` on `master`** — a stable file listing the LOD version, download URLs, sizes and checksums. New LODs can be published by editing it, with no mod update needed, and players who installed LODs are told when a newer release is available.
-- **"Install Now" / "Install When I Leave"** — once downloaded you choose when to finish the install. `/wynn_lod_install` does it on demand; leaving the server (or restarting the game) completes a postponed install automatically.
+- **"Install Now" / "Install When I Leave"** — once downloaded you choose when to finish the install. `/wynnlod install` does it on demand; leaving the server (or restarting the game) completes a postponed install automatically.
 - **New install screen** — replaces the generic "Disconnected" screen with live status, a progress bar, and a **Rejoin Wynncraft** button. After an "Install Now" it rejoins automatically after a 5 second countdown (Esc cancels). If something goes wrong it shows the error and a **Retry** button instead of leaving you waiting.
 
 ### Changed
