@@ -6,6 +6,7 @@
 #      the release notes become the changelog. A tag ending in -alpha/-beta (or a version containing
 #      alpha/beta) is published as that release channel.
 #   Or run it by hand from the Actions tab (workflow_dispatch); that skips the GitHub upload.
+#   Releases tagged LOD-* (LOD data) are skipped.
 #
 # Needs repository secrets MODRINTH_TOKEN and CURSEFORGE_TOKEN.
 # A platform with an empty project ID below is skipped.
@@ -25,6 +26,8 @@ env:
 
 jobs:
   publish:
+    # LOD data releases (tags LOD-*) only carry zips and must not publish a mod version.
+    if: github.event_name != 'release' || !startsWith(github.event.release.tag_name, 'LOD-')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
