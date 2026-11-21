@@ -97,15 +97,15 @@ public final class LodManifest {
     }
 
     private static LodManifest fallback() {
-        String base = "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-04-19-26/";
+        String base = "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-11-20-26/";
         LodManifest manifest = new LodManifest();
-        manifest.version = "LOD-04-19-26";
-        manifest.packages.put("dh", new Package(base + "wynnlodDHfruma.zip",
-                1426025322L, 1708158976L,
-                "ea680caf0c81481d06f0b533081fd6e43206c0270add5ebea8399096b4cce0cb"));
-        manifest.packages.put("voxy", new Package(base + "frumavoxylods.zip",
-                592327286L, 619917136L,
-                "2b494667869473c0133cc3de7c25b9b41b52382b1de79c7e79068139aad3f725"));
+        manifest.version = "LOD-11-20-26";
+        manifest.packages.put("dh", new Package(base + "wynnlodDH-2.2.6.zip",
+                1421070438L, 1708232704L,
+                "9c75b44bbd8ada7ad9097a60148f9f612127af6ad0bfeeabbcdb4145a243ab20"));
+        manifest.packages.put("voxy", new Package(base + "wynnlodVoxy-2.2.6.zip",
+                573999880L, 592866937L,
+                "b5a77ad39bfd731dae57ca68633f2759ee7c010e27aabc3f437d103e655e0a5a"));
         return manifest;
     }
 }

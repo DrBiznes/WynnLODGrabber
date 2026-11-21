@@ -1,12 +1,16 @@
 # Changelog
 
-## 1.3.1 — Unreleased
+## 1.3.1 — 2026-11-20
 ### Added
-- **LOD update prompt** — if you already have LODs installed and a newer LOD release is published, you're now asked (once per session) whether to update: **Update LODs**, **Not Right Now**, or **Skip This Version** (you're asked again only for a newer release). `/wynnlod update` updates on demand.
-- Installs made before LOD versions were tracked are treated as `LOD-04-19-26`, so they get the prompt too.
+- **LOD update prompt** — if you already have LODs installed and a newer LOD release is published, you're asked (once per session) whether to update: **Update LODs**, **Not Right Now**, or **Skip This Version** (you're only asked again for a newer release). `/wynnlod update` updates on demand.
+- Installs made before LOD versions were tracked count as `LOD-04-19-26`, so they get the prompt too.
+- Ships with the Wynncraft 2.2.6 LODs (Corkus update, Time Trial start locations, new social areas in Ragni, Detlas, Cinfras, Lutho and Espren, and new caves).
 
 ### Changed
-- **Wynntils is no longer required.** Character selection is now detected directly from the character compass in your hotbar.
+- **Wynntils is no longer required.** Character selection is detected from the character compass in your hotbar.
+- **All commands are now under `/wynnlod`** (`/wynnlod update`, `install`, `cancel`, `status`, `force`…), replacing the old `/wynn_lod_*` commands.
+- The automatic rejoin after "Install Now" now waits 30 seconds instead of 5, giving the LOD mod time to release its files (Esc still cancels).
+- The install screen now shows Minecraft's blurred title-screen panorama behind it.
 
 ---
 
