@@ -1,17 +1,17 @@
 {
-  "version": "LOD-04-19-26",
+  "version": "LOD-11-20-26",
   "packages": {
     "dh": {
-      "url": "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-04-19-26/wynnlodDHfruma.zip",
-      "size": 1426025322,
-      "extractedSize": 1708158976,
-      "sha256": "ea680caf0c81481d06f0b533081fd6e43206c0270add5ebea8399096b4cce0cb"
+      "url": "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-11-20-26/wynnlodDH-2.2.6.zip",
+      "size": 1421070438,
+      "extractedSize": 1708232704,
+      "sha256": "9c75b44bbd8ada7ad9097a60148f9f612127af6ad0bfeeabbcdb4145a243ab20"
     },
     "voxy": {
-      "url": "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-04-19-26/frumavoxylods.zip",
-      "size": 592327286,
-      "extractedSize": 619917136,
-      "sha256": "2b494667869473c0133cc3de7c25b9b41b52382b1de79c7e79068139aad3f725"
+      "url": "https://github.com/DrBiznes/WynnLODGrabber/releases/download/LOD-11-20-26/wynnlodVoxy-2.2.6.zip",
+      "size": 573999880,
+      "extractedSize": 592866937,
+      "sha256": "b5a77ad39bfd731dae57ca68633f2759ee7c010e27aabc3f437d103e655e0a5a"
     }
   }
 }
