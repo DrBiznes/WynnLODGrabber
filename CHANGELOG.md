@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.2 — 2026-11-25
+### Fixed
+- LOD install failing with "Illegal char <:>" when connected through an address with a port (e.g. `play.wynncraft.com:25565`). (#11)
+
+### Changed
+- Download failures caused by network problems (timeouts, DNS, SSL) now show a readable message instead of the raw Java error. (#10)
+
 ## 1.3.1 — 2026-11-20
 ### Added
 - **LOD update prompt** — if you already have LODs installed and a newer LOD release is published, you're asked (once per session) whether to update: **Update LODs**, **Not Right Now**, or **Skip This Version** (you're only asked again for a newer release). `/wynnlod update` updates on demand.
