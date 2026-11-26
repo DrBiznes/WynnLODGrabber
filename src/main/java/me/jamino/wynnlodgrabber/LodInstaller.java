@@ -30,9 +30,41 @@ final class LodInstaller {
     static Path targetDir(String mod, String serverIp) {
         Path gameDir = FabricLoader.getInstance().getGameDir();
         if ("dh".equals(mod)) {
-            return gameDir.resolve("Distant_Horizons_server_data").resolve(serverIp.replace(".", "%2E"));
+            return gameDir.resolve("Distant_Horizons_server_data").resolve(dhServerFolderName(serverIp));
         }
-        return gameDir.resolve(".voxy/saves").resolve(serverIp);
+        // Voxy (VoxyClientInstance.getBasePath) uses ServerData.ip with ':' replaced by '_'.
+        return gameDir.resolve(".voxy/saves").resolve(serverIp.replace(":", "_"));
+    }
+
+    private static final String DH_NUMERIC_IP_REGEX = "^[0-9]*\\.[0-9]*\\.[0-9]*\\.[0-9]*(:[0-9]*)?$";
+    private static final String DH_ILLEGAL_CHARS = "[\\\\/:*?\"<>|]";
+
+    /**
+     * Mirrors Distant Horizons' ClientOnlySaveStructure.getServerFolderName (IP-only mode): ParsedIp only splits
+     * the port off numeric IPs, illegal filename characters are stripped (so "play.wynncraft.com:25565" becomes
+     * "play.wynncraft.com25565"), then the result is percent-escaped with only alphanumerics left as-is.
+     */
+    static String dhServerFolderName(String serverIp) {
+        String ip = serverIp.trim();
+        if (ip.matches(DH_NUMERIC_IP_REGEX)) {
+            String[] parts = ip.split(":");
+            if (parts.length == 2) ip = parts[0];
+        }
+        ip = ip.replaceAll(DH_ILLEGAL_CHARS, "");
+
+        StringBuilder out = new StringBuilder();
+        for (byte b : ip.getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+            int c = b & 0xFF;
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+                out.append((char) c);
+            } else if (c == ' ') {
+                out.append('+');
+            } else {
+                out.append('%').append(Character.toUpperCase(Character.forDigit(c >> 4, 16)))
+                        .append(Character.toUpperCase(Character.forDigit(c & 0xF, 16)));
+            }
+        }
+        return out.toString();
     }
 
     static void install(Path staging, Path target, LodProgress progress) throws IOException {
