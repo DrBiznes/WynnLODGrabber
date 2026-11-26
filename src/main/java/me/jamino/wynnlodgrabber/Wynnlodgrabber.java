@@ -483,11 +483,35 @@ public class Wynnlodgrabber implements ModInitializer {
                     ChatFormatting.YELLOW);
         } catch (Exception e) {
             LOGGER.error("LOD download failed:", e);
-            progress.error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            progress.error = describeDownloadError(e);
             progress.setPhase(LodProgress.Phase.FAILED);
             sendClickable(client, "LOD download failed: " + progress.error
                     + " - click here to retry (it resumes where it stopped).", "/wynnlod yes", ChatFormatting.RED);
         }
+    }
+
+    /**
+     * Turns low-level network exceptions (e.g. "Connection timed out: getsockopt") into something a player can act
+     * on. The LODs are served from GitHub, so a timeout almost always means GitHub is blocked or unreachable from
+     * the player's network rather than a bug in the mod.
+     */
+    private static String describeDownloadError(Exception e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.net.SocketTimeoutException || t instanceof java.net.ConnectException
+                    || t instanceof java.net.NoRouteToHostException) {
+                return "Couldn't connect to GitHub, where the LODs are hosted. Check your internet connection, "
+                        + "VPN, firewall or antivirus, or try again later";
+            }
+            if (t instanceof java.net.UnknownHostException) {
+                return "Couldn't find GitHub's download server (DNS lookup failed). Check your internet connection "
+                        + "or DNS settings";
+            }
+            if (t instanceof javax.net.ssl.SSLException) {
+                return "Secure connection to GitHub failed. Something on your network (antivirus, proxy or "
+                        + "firewall) may be blocking it";
+            }
+        }
+        return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 
     // ---- install ----------------------------------------------------------------------------------
